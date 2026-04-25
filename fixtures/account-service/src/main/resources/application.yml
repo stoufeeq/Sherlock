@@ -1,0 +1,16 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: account-service
+  datasource:
+    url: jdbc:postgresql://postgres:5432/banking?currentSchema=accounts
+    username: ${DB_USER:banking}
+    password: ${DB_PASSWORD:banking}
+  jpa:
+    hibernate:
+      ddl-auto: none
+  flyway:
+    schemas: accounts
+    default-schema: accounts

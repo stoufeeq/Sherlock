@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info:
+  title: Mobile BFF
+  version: 1.0.0
+servers:
+  - url: http://mobile-bff:3000
+paths:
+  /mobile/home/{customerId}:
+    get:
+      summary: Home-screen payload for the mobile app
+      operationId: getHome
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /mobile/transactions:
+    post:
+      summary: Create a transaction from mobile
+      operationId: createTransaction
+      responses:
+        '201': { description: Created }
+  /mobile/notifications/register:
+    post:
+      summary: Register a device push token
+      operationId: registerDevice
+      responses:
+        '204': { description: Registered }

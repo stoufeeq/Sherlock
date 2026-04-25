@@ -1,0 +1,14 @@
+{
+  "name": "mobile-bff",
+  "version": "1.0.0",
+  "description": "Backend-for-frontend for the mobile banking app",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "axios": "^1.7.7"
+  }
+}

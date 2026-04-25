@@ -1,0 +1,92 @@
+# Dummy CMDB registry for the 10 banking fixture apps.
+# Same shape as a real CMDB entry so it's a drop-in replacement later.
+
+- id: legacy-ledger
+  name: Legacy Ledger
+  team: core-banking
+  tier: 0
+  runtime: cobol-gnucobol
+  repo: http://gitlab.local:8080/banking/legacy-ledger
+  on_call_slack: "#core-banking-oncall"
+  description: Nightly batch ledger postings (COBOL)
+
+- id: shared-domain-lib
+  name: Shared Domain Library
+  team: platform-core
+  tier: 2
+  runtime: jvm-17
+  repo: http://gitlab.local:8080/banking/shared-domain-lib
+  on_call_slack: "#platform-core"
+  description: Shared DTOs, enums, and event schemas for Java services
+
+- id: account-service
+  name: Account Service
+  team: payments-platform
+  tier: 1
+  runtime: jvm-17
+  repo: http://gitlab.local:8080/banking/account-service
+  on_call_slack: "#payments-oncall"
+  description: Account CRUD and balance reads
+
+- id: transaction-service
+  name: Transaction Service
+  team: payments-platform
+  tier: 1
+  runtime: jvm-17
+  repo: http://gitlab.local:8080/banking/transaction-service
+  on_call_slack: "#payments-oncall"
+  description: Money movement + TransactionCreated event publishing
+
+- id: customer-service
+  name: Customer Service
+  team: customer-experience
+  tier: 1
+  runtime: jvm-17
+  repo: http://gitlab.local:8080/banking/customer-service
+  on_call_slack: "#cx-oncall"
+  description: Customer profile CRUD + CustomerUpdated events
+
+- id: notification-service
+  name: Notification Service
+  team: customer-experience
+  tier: 2
+  runtime: jvm-17
+  repo: http://gitlab.local:8080/banking/notification-service
+  on_call_slack: "#cx-oncall"
+  description: Email/SMS fanout driven by transaction and customer events
+
+- id: fraud-detection
+  name: Fraud Detection
+  team: risk-engineering
+  tier: 1
+  runtime: python-3.12
+  repo: http://gitlab.local:8080/banking/fraud-detection
+  on_call_slack: "#risk-oncall"
+  description: Real-time fraud scoring on transaction events
+
+- id: analytics-service
+  name: Analytics Service
+  team: data-platform
+  tier: 2
+  runtime: python-3.12
+  repo: http://gitlab.local:8080/banking/analytics-service
+  on_call_slack: "#data-platform"
+  description: Reporting and aggregate queries across banking schemas
+
+- id: web-portal-bff
+  name: Web Portal BFF
+  team: web-experience
+  tier: 1
+  runtime: node-20
+  repo: http://gitlab.local:8080/banking/web-portal-bff
+  on_call_slack: "#web-oncall"
+  description: Backend-for-frontend for the web banking portal
+
+- id: mobile-bff
+  name: Mobile BFF
+  team: mobile-experience
+  tier: 1
+  runtime: node-20
+  repo: http://gitlab.local:8080/banking/mobile-bff
+  on_call_slack: "#mobile-oncall"
+  description: Backend-for-frontend for the mobile banking app

@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info:
+  title: Customer Service
+  version: 1.0.0
+servers:
+  - url: http://customer-service:8080
+paths:
+  /customers/{id}:
+    get:
+      summary: Get a customer
+      operationId: getCustomer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Customer' }
+    put:
+      summary: Update a customer profile
+      operationId: updateCustomer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Customer' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Customer' }
+components:
+  schemas:
+    Customer:
+      type: object
+      required: [id, fullName, email]
+      properties:
+        id: { type: string }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }

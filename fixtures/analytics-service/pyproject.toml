@@ -1,0 +1,15 @@
+[project]
+name = "analytics-service"
+version = "1.0.0"
+description = "Cross-schema reporting and aggregates for the banking platform"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.30.6",
+    "psycopg[binary]==3.2.3",
+    "pydantic==2.9.2",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

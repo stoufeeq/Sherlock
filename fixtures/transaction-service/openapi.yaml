@@ -1,0 +1,58 @@
+openapi: 3.0.3
+info:
+  title: Transaction Service
+  version: 1.0.0
+servers:
+  - url: http://transaction-service:8080
+paths:
+  /transactions:
+    post:
+      summary: Create a new transaction
+      operationId: createTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTransactionRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transaction' }
+  /transactions/{id}:
+    get:
+      summary: Get a transaction by id
+      operationId: getTransaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transaction' }
+components:
+  schemas:
+    CreateTransactionRequest:
+      type: object
+      required: [fromAccountId, toAccountId, amount, currency, type]
+      properties:
+        fromAccountId: { type: string }
+        toAccountId: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+        type: { type: string, enum: [DEBIT, CREDIT, TRANSFER, FEE] }
+    Transaction:
+      type: object
+      required: [id, fromAccountId, toAccountId, amount, currency, type]
+      properties:
+        id: { type: string }
+        fromAccountId: { type: string }
+        toAccountId: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+        type: { type: string }

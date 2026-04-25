@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sherlock — Dependency Canvas</title>
+  <link rel="stylesheet" href="/ui/canvas.css" />
+  <script src="https://unpkg.com/cytoscape@3.30.1/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>
+  <script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>
+  <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🔎 Sherlock</h1>
+    <span class="subtitle">Enterprise dependency canvas</span>
+    <div class="spacer"></div>
+    <span id="stats" class="stats-inline"></span>
+  </header>
+
+  <main>
+    <aside id="sidebar">
+      <section>
+        <h2>Mode</h2>
+        <div class="seg">
+          <button id="mode-app"      class="seg-btn active">App view</button>
+          <button id="mode-contract" class="seg-btn">Contract view</button>
+        </div>
+        <p class="hint">App view: direct app→app edges, arrows point from consumer to producer (upstream on top). Contract view: full graph with endpoints, topics, and DB tables.</p>
+      </section>
+
+      <section id="contract-filters">
+        <h2>Show (contract view)</h2>
+        <label><input type="checkbox" id="toggle-Application" checked /> <span class="chip chip-Application">Apps</span></label>
+        <label><input type="checkbox" id="toggle-Endpoint"  checked /> <span class="chip chip-Endpoint">Endpoints</span></label>
+        <label><input type="checkbox" id="toggle-Topic"     checked /> <span class="chip chip-Topic">Topics</span></label>
+        <label><input type="checkbox" id="toggle-DBTable"   checked /> <span class="chip chip-DBTable">DB Tables</span></label>
+        <label><input type="checkbox" id="toggle-DBSchema"  /> <span class="chip chip-DBSchema">DB Schemas</span></label>
+        <label><input type="checkbox" id="toggle-FileFeed"  checked /> <span class="chip chip-FileFeed">File feeds</span></label>
+        <label><input type="checkbox" id="toggle-Library"   /> <span class="chip chip-Library">Libraries</span></label>
+      </section>
+
+      <section id="app-filters">
+        <h2>Show (app view)</h2>
+        <label><input type="checkbox" id="toggle-kind-REST"  checked /> <span class="chip chip-REST">REST</span></label>
+        <label><input type="checkbox" id="toggle-kind-EVENT" checked /> <span class="chip chip-EVENT">Events</span></label>
+        <label><input type="checkbox" id="toggle-kind-DB"    checked /> <span class="chip chip-DB">DB coupling</span></label>
+        <label><input type="checkbox" id="toggle-kind-FILE"  checked /> <span class="chip chip-FILE">File feeds</span></label>
+        <label><input type="checkbox" id="toggle-kind-LIB"   /> <span class="chip chip-LIB">Library</span></label>
+      </section>
+
+      <section>
+        <h2>Filter by team</h2>
+        <select id="team-filter">
+          <option value="">— all teams —</option>
+        </select>
+      </section>
+
+      <section>
+        <h2>Archived</h2>
+        <label><input type="checkbox" id="toggle-archived" /> Show archived apps</label>
+        <p class="hint" id="archived-hint"></p>
+      </section>
+
+      <section>
+        <h2>Apps</h2>
+        <ul id="app-list" class="app-list"></ul>
+      </section>
+
+      <section id="selected-panel" class="hidden">
+        <h2>Selected</h2>
+        <div id="selected-detail"></div>
+        <div class="button-row">
+          <button id="impact-downstream">Downstream impact →</button>
+          <button id="impact-upstream">← Upstream</button>
+          <button id="clear-impact" class="secondary">Reset</button>
+        </div>
+        <div class="button-row">
+          <button id="generate-docs" class="secondary">📄 Generate docs (Sherlock autodoc)</button>
+        </div>
+        <div id="autodoc-status" class="autodoc-status"></div>
+      </section>
+    </aside>
+
+    <section id="canvas-wrap">
+      <div id="cy"></div>
+    </section>
+  </main>
+
+  <script src="/ui/canvas.js"></script>
+</body>
+</html>

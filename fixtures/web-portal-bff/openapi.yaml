@@ -1,0 +1,24 @@
+openapi: 3.0.3
+info:
+  title: Web Portal BFF
+  version: 1.0.0
+servers:
+  - url: http://web-portal-bff:3000
+paths:
+  /api/overview/{customerId}:
+    get:
+      summary: Aggregated overview for the logged-in customer
+      operationId: getOverview
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/transactions:
+    post:
+      summary: Create a transaction on behalf of the logged-in customer
+      operationId: createTransaction
+      responses:
+        '201': { description: Created }

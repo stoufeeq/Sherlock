@@ -1,0 +1,21 @@
+asyncapi: 2.6.0
+info:
+  title: Notification Service (event consumer)
+  version: 1.0.0
+servers:
+  redpanda:
+    url: redpanda:29092
+    protocol: kafka
+channels:
+  banking.transactions.created:
+    subscribe:
+      operationId: onTransactionCreated
+      message:
+        name: TransactionCreatedEvent
+        contentType: application/json
+  banking.customers.updated:
+    subscribe:
+      operationId: onCustomerUpdated
+      message:
+        name: CustomerUpdatedEvent
+        contentType: application/json

@@ -1,0 +1,43 @@
+openapi: 3.0.3
+info:
+  title: Analytics Service
+  version: 1.0.0
+servers:
+  - url: http://analytics-service:8080
+paths:
+  /reports/daily-volume:
+    get:
+      summary: Daily transaction volume by currency
+      operationId: getDailyVolume
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    day: { type: string, format: date }
+                    currency: { type: string }
+                    total: { type: number }
+  /reports/customer-summary/{customerId}:
+    get:
+      summary: Customer-level summary across accounts
+      operationId: getCustomerSummary
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /reports/ledger-daily:
+    get:
+      summary: Previous night's ledger batch summary (read from shared file)
+      operationId: getLedgerDaily
+      responses:
+        '200':
+          description: OK

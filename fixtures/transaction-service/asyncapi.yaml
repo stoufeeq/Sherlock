@@ -1,0 +1,29 @@
+asyncapi: 2.6.0
+info:
+  title: Transaction Service Events
+  version: 1.0.0
+servers:
+  redpanda:
+    url: redpanda:29092
+    protocol: kafka
+channels:
+  banking.transactions.created:
+    publish:
+      operationId: publishTransactionCreated
+      message:
+        name: TransactionCreatedEvent
+        contentType: application/json
+        payload:
+          type: object
+          required: [transactionId, fromAccount, toAccount, amount, type, occurredAt]
+          properties:
+            transactionId: { type: string }
+            fromAccount: { type: string }
+            toAccount: { type: string }
+            amount:
+              type: object
+              properties:
+                amount: { type: number }
+                currency: { type: string }
+            type: { type: string, enum: [DEBIT, CREDIT, TRANSFER, FEE] }
+            occurredAt: { type: string, format: date-time }

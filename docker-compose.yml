@@ -1,0 +1,122 @@
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    hostname: ${GITLAB_HOSTNAME:-gitlab.local}
+    restart: unless-stopped
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://${GITLAB_HOSTNAME:-localhost}:${GITLAB_HTTP_PORT:-8080}'
+        gitlab_rails['gitlab_shell_ssh_port'] = ${GITLAB_SSH_PORT:-2222}
+        # Puma defaults to 8080 too — move it so it doesn't collide with nginx
+        puma['port'] = 8081
+        puma['worker_processes'] = 2
+        sidekiq['max_concurrency'] = 10
+        prometheus_monitoring['enable'] = false
+        # initial root password is auto-generated into /etc/gitlab/initial_root_password
+        # retrieve it with: make gitlab-root-password
+    ports:
+      - "${GITLAB_HTTP_PORT:-8080}:${GITLAB_HTTP_PORT:-8080}"
+      - "${GITLAB_SSH_PORT:-2222}:22"
+    volumes:
+      - ./gitlab-data/config:/etc/gitlab
+      - ./gitlab-data/logs:/var/log/gitlab
+      - ./gitlab-data/data:/var/opt/gitlab
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:${GITLAB_HTTP_PORT:-8080}/-/readiness"]
+      interval: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 180s
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-banking}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-banking}
+      POSTGRES_DB: ${POSTGRES_DB:-banking}
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    volumes:
+      - ./redpanda-data:/var/lib/redpanda/data
+
+  cmdb-stub:
+    build: ./services/sherlock-cmdb-stub
+    restart: unless-stopped
+    ports:
+      - "${CMDB_PORT:-8500}:8000"
+    volumes:
+      - ./services/sherlock-cmdb-stub/data:/app/data:ro
+
+  neo4j:
+    image: neo4j:5-community
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-sherlock-dev}
+      NEO4J_server_memory_pagecache_size: 256M
+      NEO4J_server_memory_heap_initial__size: 512M
+      NEO4J_server_memory_heap_max__size: 512M
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    volumes:
+      - ./neo4j-data/data:/data
+      - ./neo4j-data/logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  sherlock:
+    build: ./services/sherlock
+    restart: unless-stopped
+    environment:
+      SHERLOCK_LOG_LEVEL: ${SHERLOCK_LOG_LEVEL:-INFO}
+      GITLAB_INTERNAL_URL: http://gitlab:${GITLAB_HTTP_PORT:-8080}
+      GITLAB_EXTERNAL_URL: http://${GITLAB_HOSTNAME:-localhost}:${GITLAB_HTTP_PORT:-8080}
+      GITLAB_TOKEN: ${GITLAB_TOKEN}
+      GITLAB_GROUP: ${GITLAB_GROUP:-banking}
+      GITLAB_GROUPS: ${GITLAB_GROUPS:-}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-sherlock-dev}
+      CMDB_URL: http://cmdb-stub:8000
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-sherlock-local-dev}
+      RECONCILE_ENABLED: ${RECONCILE_ENABLED:-true}
+      RECONCILE_INTERVAL_SECONDS: ${RECONCILE_INTERVAL_SECONDS:-300}
+      SHERLOCK_LLM_PROVIDER: ${SHERLOCK_LLM_PROVIDER:-mock}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-06-01}
+    ports:
+      - "${SHERLOCK_PORT:-8001}:8000"
+    depends_on:
+      - neo4j
+      - cmdb-stub

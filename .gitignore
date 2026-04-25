@@ -1,0 +1,25 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+node_modules/
+package-lock.json
+target/
+build/
+dist/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+*.log
+gitlab-data/
+postgres-data/
+redpanda-data/
+neo4j-data/
+
+# Generated PPTX is committed (it's the user's pitch deck snapshot); the
+# regenerator's tmp venv is not.
+tools/deck/.venv/

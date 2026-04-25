@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Account Service
+  version: 1.0.0
+  description: Account CRUD and balance reads for the banking platform.
+servers:
+  - url: http://account-service:8080
+paths:
+  /accounts/{id}:
+    get:
+      summary: Get an account by id
+      operationId: getAccount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '404': { description: Not found }
+  /accounts/{id}/balance:
+    get:
+      summary: Get current balance for an account
+      operationId: getBalance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Balance' }
+  /accounts/{id}/legacy-status:
+    get:
+      summary: Legacy status endpoint — superseded by GET /accounts/{id}
+      operationId: getLegacyStatus
+      deprecated: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LegacyStatus' }
+components:
+  schemas:
+    Account:
+      type: object
+      required: [id, customerId, status]
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        status: { type: string, enum: [ACTIVE, FROZEN, CLOSED] }
+    Balance:
+      type: object
+      required: [accountId, amount, currency]
+      properties:
+        accountId: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+    LegacyStatus:
+      type: object
+      required: [accountId, status]
+      properties:
+        accountId: { type: string }
+        status: { type: string }

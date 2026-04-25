@@ -1,0 +1,25 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: transaction-service
+  datasource:
+    url: jdbc:postgresql://postgres:5432/banking?currentSchema=transactions
+    username: ${DB_USER:banking}
+    password: ${DB_PASSWORD:banking}
+  jpa:
+    hibernate:
+      ddl-auto: none
+  flyway:
+    schemas: transactions
+    default-schema: transactions
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKER:redpanda:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+clients:
+  account-service:
+    url: ${ACCOUNT_SERVICE_URL:http://account-service:8080}
