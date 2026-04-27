@@ -151,6 +151,7 @@ def reconcile_once_sync(
                     team=svc.get("team"),
                     tier=svc.get("tier"),
                     runtime=svc.get("runtime"),
+                    platform=svc.get("platform"),
                     project_id=p.get("id"),
                 )
                 refreshed.append(app_name)

@@ -16,7 +16,8 @@ class ImpactedApp:
     team: str | None
     tier: int | None
     on_call_slack: str | None
-    confidence: str  # "exact" | "heuristic"
+    confidence: str           # "exact" | "heuristic"
+    platform: str | None = None  # azure / on-prem / library — for cross-boundary callouts
 
 
 @dataclass
@@ -49,6 +50,7 @@ def resolve(
                     team=svc.get("team"),
                     tier=svc.get("tier"),
                     on_call_slack=svc.get("on_call_slack"),
+                    platform=svc.get("platform"),
                     confidence=confidence,
                 )
             )

@@ -53,6 +53,7 @@ def scan_project(
         team=svc.get("team"),
         tier=svc.get("tier"),
         runtime=svc.get("runtime"),
+        platform=svc.get("platform"),
         project_id=project.get("id"),
     )
     graph.apply_analysis(result, host_to_app_map(cmdb))

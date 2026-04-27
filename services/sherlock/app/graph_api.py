@@ -56,7 +56,8 @@ def _fetch_all(driver, *, include_archived: bool = False) -> dict:
         for row in s.run(
             f"MATCH (a:Application) {app_filter} "
             "RETURN a.name AS name, a.team AS team, a.tier AS tier, "
-            "a.runtime AS runtime, a.repo_url AS repo_url, a.commit_sha AS commit_sha, "
+            "a.runtime AS runtime, a.platform AS platform, "
+            "a.repo_url AS repo_url, a.commit_sha AS commit_sha, "
             "a.project_id AS project_id, coalesce(a.archived, false) AS archived, "
             "a.renamed_to AS renamed_to"
         ):
@@ -65,6 +66,7 @@ def _fetch_all(driver, *, include_archived: bool = False) -> dict:
                 "team": row["team"],
                 "tier": row["tier"],
                 "runtime": row["runtime"],
+                "platform": row["platform"],
                 "repo_url": row["repo_url"],
                 "commit_sha": row["commit_sha"],
                 "project_id": row["project_id"],
@@ -169,6 +171,7 @@ def apps(request: Request, include_archived: bool = True) -> list[dict]:
                    a.team AS team,
                    a.tier AS tier,
                    a.runtime AS runtime,
+                   a.platform AS platform,
                    a.commit_sha AS commit_sha,
                    a.project_id AS project_id,
                    coalesce(a.archived, false) AS archived,
@@ -216,7 +219,8 @@ def app_graph(request: Request, include_archived: bool = False) -> dict:
         for row in s.run(
             f"MATCH (a:Application) {app_filter} "
             "RETURN a.name AS name, a.team AS team, a.tier AS tier, "
-            "a.runtime AS runtime, a.repo_url AS repo_url, a.commit_sha AS commit_sha, "
+            "a.runtime AS runtime, a.platform AS platform, "
+            "a.repo_url AS repo_url, a.commit_sha AS commit_sha, "
             "a.project_id AS project_id, coalesce(a.archived, false) AS archived"
         ):
             add_app(dict(row))

@@ -36,12 +36,16 @@ KIND_ICON = {
 }
 
 
-def _fmt_app(a: ImpactedApp) -> str:
+def _fmt_app(a: ImpactedApp, source_platform: str | None = None) -> str:
     team = f"team: `{a.team}`" if a.team else "team: _unknown_"
     tier = f"tier {a.tier}" if a.tier is not None else "tier _?_"
     channel = f"on-call: `{a.on_call_slack}`" if a.on_call_slack else "on-call: _unknown_"
     tag = "" if a.confidence == "exact" else " _(heuristic match)_"
-    return f"- **`{a.name}`** ({team} · {tier} · {channel}){tag}"
+    plat = ""
+    if a.platform:
+        cross = source_platform and a.platform != source_platform and a.platform != "library"
+        plat = f" · platform: `{a.platform}`" + (" 🚨 cross-boundary" if cross else "")
+    return f"- **`{a.name}`** ({team} · {tier} · {channel}{plat}){tag}"
 
 
 def render_comment(
@@ -50,13 +54,15 @@ def render_comment(
     source_commit: str,
     target_branch: str,
     impacts: list[ResolvedImpact],
+    source_platform: str | None = None,
 ) -> str:
     """Return the full markdown body of the MR comment."""
     lines: list[str] = []
     lines.append(COMMENT_MARKER)
     lines.append("## 🔎 Sherlock Impact Analysis")
     lines.append("")
-    lines.append(f"Source app: `{source_app}`  ·  commit `{source_commit[:8]}`  ·  target branch `{target_branch}`")
+    plat_suffix = f"  ·  platform `{source_platform}`" if source_platform else ""
+    lines.append(f"Source app: `{source_app}`  ·  commit `{source_commit[:8]}`  ·  target branch `{target_branch}`{plat_suffix}")
     lines.append("")
 
     if not impacts:
@@ -80,6 +86,24 @@ def render_comment(
                      " — no required contracts removed; consumers should not break.")
     lines.append("")
 
+    # Cross-platform call-out — surfaced once at the top, before the per-break breakdown.
+    if source_platform:
+        cross_apps = [
+            a for r in impacts for a in r.impacted
+            if a.platform and a.platform != source_platform and a.platform != "library"
+        ]
+        cross_apps_unique = {a.name: a for a in cross_apps}.values()
+        if cross_apps_unique:
+            other_platforms = sorted({a.platform for a in cross_apps_unique})
+            plat_list = ", ".join(f"`{p}`" for p in other_platforms)
+            lines.append(
+                f"🚨 **Cross-platform impact** — this MR originates on `{source_platform}` and affects "
+                f"{len(cross_apps_unique)} app(s) on a different platform ({plat_list}). "
+                f"Cross-boundary changes deserve extra coordination — Azure ↔ on-prem incidents are "
+                f"the costliest to debug."
+            )
+            lines.append("")
+
     for r in impacts:
         icon = KIND_ICON.get(r.change.kind, "❗")
         headline = KIND_HEADLINE.get(r.change.kind, r.change.kind)
@@ -99,12 +123,12 @@ def render_comment(
         if exact:
             lines.append(f"**Directly affected ({len(exact)}):**")
             for a in exact:
-                lines.append(_fmt_app(a))
+                lines.append(_fmt_app(a, source_platform))
             lines.append("")
         if heuristic:
             lines.append(f"**Potentially affected ({len(heuristic)}):**  _matched by host, not by specific path_")
             for a in heuristic:
-                lines.append(_fmt_app(a))
+                lines.append(_fmt_app(a, source_platform))
             lines.append("")
 
     lines.append("---")

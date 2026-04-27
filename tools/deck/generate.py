@@ -455,10 +455,10 @@ def build_coverage(prs, idx, total):
 
     headers = ["COUPLING TYPE", "SIGNAL SOURCE", "LANGUAGES", "BREAK KINDS DETECTED"]
     rows = [
-        ("REST", "OpenAPI spec + HTTP client code", "Java · Python · JS/TS",
-         "Endpoint removed · Request/response shape changed"),
-        ("Events (Kafka)", "AsyncAPI spec + publish/subscribe code", "Java · Python",
-         "Topic publish removed · Payload shape changed"),
+        ("REST", "OpenAPI + HTTP client code (regex + tree-sitter AST)", "Java · Python · JS/TS",
+         "Endpoint removed · Required-field shape changed · Optional-field added (info) · Deprecated removal (info)"),
+        ("Events (Kafka)", "AsyncAPI + publish/subscribe code", "Java · Python",
+         "Topic publish removed · Required-field payload changed · Optional-field added (info)"),
         ("Database", "Flyway migrations + SQL in code", "Java · Python · COBOL",
          "Table write removed · Schema ownership released"),
         ("Shared files", "Path literals + COBOL SELECT/ASSIGN", "Java · Python · JS · COBOL",
@@ -487,8 +487,15 @@ def build_coverage(prs, idx, total):
                       Inches(w_cols[j]), Inches(0.5), text,
                       size=10, bold=(j == 0 or is_cobol), color=color)
 
-    _notes(s, "Highlight the COBOL line: 'Very few tools in this space speak COBOL. "
-              "Our legacy estate is real — this isn't theoretical.'")
+    _add_text(s, Inches(0.6), Inches(6.55), Inches(12.1), Inches(0.35),
+              "Required-field changes are flagged BREAKING; optional-field additions land as INFO — "
+              "the diff engine separates contract evolution from contract regression.",
+              size=10, italic=True, color=MID_GREY)
+
+    _notes(s, "Highlight three things: (1) COBOL line — few tools in this space speak COBOL. "
+              "(2) tree-sitter — Java/Python/JS now extracted at AST level, catching URI-builder lambdas + "
+              "variable-resolved URLs the regex extractor misses. (3) precision — required-vs-optional "
+              "decomposition means adding a new optional response field doesn't fire a breaking-change alert.")
     return s
 
 
@@ -499,52 +506,69 @@ def build_mr_moment(prs, idx, total):
                           "Sherlock posts a structured comment on the MR — with affected teams "
                           "and on-call channels named.")
 
-    # Left: mock MR comment
-    left_x = Inches(0.6); left_y = Inches(3.0); left_w = Inches(6.5); left_h = Inches(3.8)
+    # Left: mock MR comment — now showing the cross-platform callout banner
+    left_x = Inches(0.6); left_y = Inches(2.85); left_w = Inches(6.5); left_h = Inches(4.2)
     _add_rect(s, left_x, left_y, left_w, left_h, fill=CARD_BG, line=LINE_GREY)
     _add_rect(s, left_x, left_y, left_w, Inches(0.08), fill=UBS_RED)
 
-    _add_text(s, left_x + Inches(0.3), left_y + Inches(0.2), left_w - Inches(0.6), Inches(0.35),
-              "SHERLOCK BOT  ·  banking/transaction-service !42", size=9, bold=True, color=UBS_RED)
-    _add_text(s, left_x + Inches(0.3), left_y + Inches(0.55), left_w - Inches(0.6), Inches(0.5),
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(0.18), left_w - Inches(0.6), Inches(0.3),
+              "SHERLOCK BOT  ·  banking/account-service !12", size=9, bold=True, color=UBS_RED)
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(0.5), left_w - Inches(0.6), Inches(0.45),
               "🔎 Sherlock Impact Analysis", size=15, bold=True, color=NEAR_BLK)
-    _add_text(s, left_x + Inches(0.3), left_y + Inches(1.0), left_w - Inches(0.6), Inches(0.35),
-              "Source: transaction-service   Commit: 20bebe1b   Target: main",
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(0.95), left_w - Inches(0.6), Inches(0.3),
+              "Source: account-service · platform on-prem · target main",
               size=10, color=MID_GREY, font=FONT_MONO)
-    _add_text(s, left_x + Inches(0.3), left_y + Inches(1.4), left_w - Inches(0.6), Inches(0.35),
-              "⚠️  1 breaking change detected",
-              size=12, bold=True, color=UBS_RED)
-    _add_text(s, left_x + Inches(0.3), left_y + Inches(1.8), left_w - Inches(0.6), Inches(0.35),
-              "📄 Stopped writing shared file feed",
-              size=11, bold=True, color=NEAR_BLK)
-    _add_text(s, left_x + Inches(0.3), left_y + Inches(2.1), left_w - Inches(0.6), Inches(0.4),
-              "/shared/postings/POSTINGS.DAT",
-              size=10, color=DARK_GREY, font=FONT_MONO)
 
-    _add_text(s, left_x + Inches(0.3), left_y + Inches(2.6), left_w - Inches(0.6), Inches(0.3),
-              "Directly affected (1):", size=10, bold=True, color=NEAR_BLK)
-    _add_text(s, left_x + Inches(0.3), left_y + Inches(2.9), left_w - Inches(0.6), Inches(0.4),
-              "• legacy-ledger — core-banking · tier 0 · on-call #core-banking-oncall",
-              size=10, color=DARK_GREY, font=FONT_MONO)
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(1.3), left_w - Inches(0.6), Inches(0.3),
+              "⚠️  1 breaking change detected",
+              size=11, bold=True, color=UBS_RED)
+
+    # Cross-platform callout — UBS-red banner inside the comment
+    callout_y = left_y + Inches(1.65)
+    _add_rect(s, left_x + Inches(0.25), callout_y, left_w - Inches(0.5), Inches(0.55),
+              fill=RGBColor(0xFE, 0xE2, 0xE2), line=UBS_RED)
+    _add_text(s, left_x + Inches(0.4), callout_y + Inches(0.06), left_w - Inches(0.7), Inches(0.5),
+              "🚨  Cross-platform impact — originates on  on-prem  and affects 3 app(s) on  azure.",
+              size=10, bold=True, color=UBS_RED)
+
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(2.35), left_w - Inches(0.6), Inches(0.3),
+              "🔌 Removed REST endpoint",
+              size=11, bold=True, color=NEAR_BLK)
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(2.65), left_w - Inches(0.6), Inches(0.35),
+              "GET /accounts/{*}", size=10, color=DARK_GREY, font=FONT_MONO)
+
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(3.05), left_w - Inches(0.6), Inches(0.3),
+              "Directly affected (4):", size=10, bold=True, color=NEAR_BLK)
     _add_text(s, left_x + Inches(0.3), left_y + Inches(3.35), left_w - Inches(0.6), Inches(0.35),
-              "Sherlock informs; it does not block merges.",
-              size=9, italic=True, color=MID_GREY)
+              "• mobile-bff      mobile-experience  T1  azure  🚨",
+              size=9, color=DARK_GREY, font=FONT_MONO)
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(3.55), left_w - Inches(0.6), Inches(0.35),
+              "• web-portal-bff  web-experience     T1  azure  🚨",
+              size=9, color=DARK_GREY, font=FONT_MONO)
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(3.75), left_w - Inches(0.6), Inches(0.35),
+              "• fraud-detection risk-engineering   T1  azure  🚨",
+              size=9, color=DARK_GREY, font=FONT_MONO)
+    _add_text(s, left_x + Inches(0.3), left_y + Inches(3.95), left_w - Inches(0.6), Inches(0.35),
+              "• transaction-svc payments-platform  T1  on-prem",
+              size=9, color=DARK_GREY, font=FONT_MONO)
 
     # right: explanatory bullets
-    right_x = Inches(7.4); right_y = Inches(3.0)
+    right_x = Inches(7.4); right_y = Inches(2.85)
     _add_text(s, right_x, right_y, Inches(5.3), Inches(0.4),
               "What this replaces",
               size=12, bold=True, color=UBS_RED)
-    _add_bullets(s, right_x, right_y + Inches(0.5), Inches(5.3), Inches(3.2), [
+    _add_bullets(s, right_x, right_y + Inches(0.5), Inches(5.3), Inches(3.4), [
         ("Slack triage.", "No more 'who touched X yesterday?' threads across 17 domains."),
         ("Blame-after-the-fact.", "Affected teams see the impact before the author hits Merge."),
         ("Gated releases.", "Soft signal — inform, don't block. Keeps velocity."),
         ("Knowledge silos.", "On-call channel is named in the comment, not discovered."),
+        ("Cross-cloud surprise.", "🚨 banner explicitly flags Azure↔on-prem boundary crossings — "
+                                  "the costliest type of break to debug."),
     ], size=12, line_spacing=1.35)
 
     _notes(s, "This is the 'aha' slide. If possible, open http://localhost:8001 in a browser "
               "and show the live canvas during this moment. If not, the mock here is accurate "
-              "to what a real MR comment looks like.")
+              "to what a real MR comment looks like — cross-platform callout banner included.")
     return s
 
 
@@ -619,6 +643,110 @@ def build_sticky_lifecycle(prs, idx, total):
 
     _notes(s, "This is the slide that sells 'inform, don't block'. The system gives teams "
               "the data; responsibility stays with the team. SLA dashboard comes in H3.")
+    return s
+
+
+def build_hybrid_platform(prs, idx, total):
+    s = _blank_slide(prs); _header(s); _footer(s, idx, total)
+    _title_block(s, "Hybrid estate, one graph",
+                 eyebrow="Cross-platform awareness",
+                 subtitle="Same GitLab. One canvas. Every app tagged with its deployment "
+                          "platform — and every Azure ↔ on-prem boundary crossing called out.")
+
+    AZURE_BLUE = RGBColor(0x00, 0x78, 0xD4)
+    SLATE      = RGBColor(0x6B, 0x72, 0x80)
+    AZURE_BG   = RGBColor(0xE6, 0xF2, 0xFB)
+    ON_PREM_BG = RGBColor(0xF1, 0xF3, 0xF5)
+
+    # ---- Two-zone diagram (left ~7.6") -------------------------------------
+    diag_x = Inches(0.6); diag_y = Inches(2.85); diag_w = Inches(7.6); diag_h = Inches(4.0)
+
+    half_w = (diag_w - Inches(0.2)) / 2
+    # Azure zone
+    _add_rect(s, diag_x, diag_y, half_w, diag_h, fill=AZURE_BG, line=AZURE_BLUE)
+    _add_rect(s, diag_x, diag_y, half_w, Inches(0.4), fill=AZURE_BLUE)
+    _add_text(s, diag_x + Inches(0.2), diag_y + Inches(0.06),
+              half_w - Inches(0.4), Inches(0.3),
+              "AZURE", size=11, bold=True, color=WHITE)
+
+    # On-prem zone
+    onprem_x = diag_x + half_w + Inches(0.2)
+    _add_rect(s, onprem_x, diag_y, half_w, diag_h, fill=ON_PREM_BG, line=SLATE)
+    _add_rect(s, onprem_x, diag_y, half_w, Inches(0.4), fill=SLATE)
+    _add_text(s, onprem_x + Inches(0.2), diag_y + Inches(0.06),
+              half_w - Inches(0.4), Inches(0.3),
+              "ON-PREM", size=11, bold=True, color=WHITE)
+
+    # Application bubbles — coloured rings reflect the platform tag in CMDB
+    def _app_node(left, top, label, ring):
+        # ring rectangle (3pt outline)
+        _add_rect(s, left, top, Inches(1.6), Inches(0.55),
+                  fill=WHITE, line=ring, line_weight=2.5)
+        _add_text(s, left, top + Inches(0.13), Inches(1.6), Inches(0.3),
+                  label, size=10, bold=True, color=NEAR_BLK, align=PP_ALIGN.CENTER)
+
+    # Azure-side apps (4)
+    azure_inner_x = diag_x + Inches(0.3)
+    _app_node(azure_inner_x,                 diag_y + Inches(0.7), "mobile-bff",       AZURE_BLUE)
+    _app_node(azure_inner_x + Inches(1.8),   diag_y + Inches(0.7), "web-portal-bff",   AZURE_BLUE)
+    _app_node(azure_inner_x,                 diag_y + Inches(1.55), "fraud-detection", AZURE_BLUE)
+    _app_node(azure_inner_x + Inches(1.8),   diag_y + Inches(1.55), "analytics-svc",   AZURE_BLUE)
+
+    # On-prem-side apps (5)
+    op_inner_x = onprem_x + Inches(0.3)
+    _app_node(op_inner_x,                    diag_y + Inches(0.7),  "account-service",     SLATE)
+    _app_node(op_inner_x + Inches(1.8),      diag_y + Inches(0.7),  "transaction-service", SLATE)
+    _app_node(op_inner_x,                    diag_y + Inches(1.55), "customer-service",    SLATE)
+    _app_node(op_inner_x + Inches(1.8),      diag_y + Inches(1.55), "notification-svc",    SLATE)
+    _app_node(op_inner_x + Inches(0.9),      diag_y + Inches(2.4),  "legacy-ledger",       SLATE)
+
+    # Boundary-crossing edges — drawn in UBS red to flag cross-platform calls.
+    # (account-service /accounts/{*} ← mobile-bff, web-portal-bff, fraud-detection)
+    src_x = op_inner_x + Inches(0.8)
+    src_y = diag_y + Inches(0.7) + Inches(0.275)
+    for tgt in [(azure_inner_x + Inches(0.8), diag_y + Inches(0.7) + Inches(0.275)),       # mobile-bff
+                (azure_inner_x + Inches(2.6), diag_y + Inches(0.7) + Inches(0.275)),       # web-portal-bff
+                (azure_inner_x + Inches(0.8), diag_y + Inches(1.55) + Inches(0.275))]:     # fraud-detection
+        _add_connector(s, src_x, src_y, tgt[0], tgt[1], color=UBS_RED, weight=1.75, arrow=True)
+
+    # 🚨 callout label sitting between the two zones
+    _add_rect(s, diag_x + half_w - Inches(0.4), diag_y + diag_h - Inches(0.55),
+              Inches(1.0), Inches(0.4), fill=UBS_RED)
+    _add_text(s, diag_x + half_w - Inches(0.4), diag_y + diag_h - Inches(0.49),
+              Inches(1.0), Inches(0.3),
+              "🚨 cross-boundary",
+              size=9, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
+
+    # caption under the diagram
+    _add_text(s, diag_x, Inches(6.95), diag_w, Inches(0.25),
+              "Live edges from the POC: account-service (on-prem) is consumed by 3 azure-side apps.",
+              size=9, italic=True, color=MID_GREY)
+
+    # ---- Right rail — capability bullets ----------------------------------
+    rx = Inches(8.4); ry = Inches(2.85); rw = Inches(4.4)
+    _add_text(s, rx, ry, rw, Inches(0.4),
+              "What's tagged, surfaced, and labelled",
+              size=12, bold=True, color=UBS_RED)
+    _add_bullets(s, rx, ry + Inches(0.5), rw, Inches(4.0), [
+        ("CMDB drives it. ",     "Each app's `platform` field (azure / on-prem / library) "
+                                  "merges into the graph on every scan."),
+        ("Coloured rings. ",     "Azure apps ring blue, on-prem ring slate — instantly "
+                                  "visible on the canvas."),
+        ("Platform filter. ",    "Toolbar dropdown filters the canvas to one platform."),
+        ("MR comment banner. ",  "🚨 Cross-platform impact when source platform ≠ "
+                                  "affected platform — placed at the top of the comment."),
+        ("Sticky-issue label. ", "`impact::cross-platform` (UBS red) auto-applied to "
+                                  "downstream issues that span the boundary."),
+        ("Same workflow. ",      "One GitLab, one webhook flow, one canvas — no separate "
+                                  "tooling per platform."),
+    ], size=11, line_spacing=1.35)
+
+    _notes(s, "This slide answers the obvious follow-up to slide 8: 'How does this work in our "
+              "hybrid estate?' Anchor: 'Sherlock doesn't care where you deploy. CMDB tells us "
+              "the platform, the graph tracks the edges, and any time a break crosses the "
+              "Azure ↔ on-prem boundary we surface it explicitly — at MR time and on the "
+              "downstream issue. Cross-cloud incidents are the costliest to debug; this is "
+              "the cheap end of catching them.'")
     return s
 
 
@@ -754,6 +882,7 @@ def build_proof(prs, idx, total):
         ("Python/FastAPI · ",   "analytics, fraud-detection"),
         ("Node/Express · ",     "web-portal-bff, mobile-bff"),
         ("COBOL · ",            "legacy-ledger (postings batch + ledger report)"),
+        ("Hybrid platform · ",  "5 on-prem apps + 4 azure apps + 1 library, tagged via CMDB"),
         ("Contracts · ",        "OpenAPI, AsyncAPI/Kafka, Flyway SQL, shared file feeds"),
         ("LLM · ",              "Gemini (local) + Azure OpenAI (enterprise), pluggable adapter"),
     ], size=12, line_spacing=1.4)
@@ -765,20 +894,21 @@ def build_proof(prs, idx, total):
 
     metrics = [
         ("59",  "graph nodes · 81 edges across 6 coupling types incl. FILE"),
-        ("11",  "REST call edges — all resolved to exact method + path"),
-        ("9",   "break kinds detected — endpoint/topic/table/file/library"),
+        ("11",  "REST call edges — exact method + path via regex + tree-sitter AST"),
+        ("11",  "break kinds — endpoint/topic/table/file/library, required-vs-optional aware"),
+        ("3",   "languages parsed at AST level — Java · Python · JS/TS"),
         ("60s", "reconciler interval — new GitLab projects auto-discovered + hooked"),
         ("6",   "autodoc MRs opened via Gemini in one demo session (click-driven)"),
     ]
     for i, (n, desc) in enumerate(metrics):
-        my = right_y + Inches(0.5 + i * 0.6)
-        _add_rect(s, right_x, my, Inches(1.0), Inches(0.5), fill=UBS_RED)
-        _add_text(s, right_x, my + Inches(0.08), Inches(1.0), Inches(0.4),
-                  n, size=18, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
-        _add_text(s, right_x + Inches(1.2), my + Inches(0.13), right_w - Inches(1.3), Inches(0.4),
+        my = right_y + Inches(0.5 + i * 0.52)
+        _add_rect(s, right_x, my, Inches(0.95), Inches(0.45), fill=UBS_RED)
+        _add_text(s, right_x, my + Inches(0.05), Inches(0.95), Inches(0.4),
+                  n, size=17, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
+        _add_text(s, right_x + Inches(1.15), my + Inches(0.1), right_w - Inches(1.25), Inches(0.4),
                   desc, size=10, color=DARK_GREY)
 
-    _add_text(s, Inches(0.6), Inches(6.6), Inches(12.1), Inches(0.35),
+    _add_text(s, Inches(0.6), Inches(6.85), Inches(12.1), Inches(0.3),
               "Full live demo available on request — 15 min end-to-end across all five loops.",
               size=10, italic=True, color=MID_GREY)
 
@@ -798,9 +928,9 @@ def build_roadmap(prs, idx, total):
 
     horizons = [
         ("H1", "POC ✓ · pilot 0–3 mo",
-         "Cross-app visibility + MR impact bot + auto-discovery",
-         "Canvas live. MR impact bot live. Sticky impact tags live. "
-         "Reconciler auto-discovers new GitLab projects, installs webhooks, "
+         "Cross-app visibility + MR impact bot + auto-discovery + hybrid platform",
+         "Canvas live. MR impact bot live. Sticky impact tags live. Hybrid Azure ↔ on-prem "
+         "callouts live. Reconciler auto-discovers new GitLab projects, installs webhooks, "
          "detects renames and archival. Pilot = production hardening + first domain rollout.",
          UBS_RED),
         ("H2", "POC started · pilot 3–6 mo",
@@ -1037,11 +1167,13 @@ def build_a_coverage_detail(prs, idx, total):
     _add_text(s, Inches(0.6), Inches(2.9), Inches(12), Inches(0.4),
               "Covered today", size=13, bold=True, color=UBS_RED)
     _add_bullets(s, Inches(0.6), Inches(3.3), Inches(12.1), Inches(1.9), [
-        "REST endpoints exposed (OpenAPI) + called (HTTP client idioms per language)",
-        "Kafka topics published/consumed (AsyncAPI + in-code KafkaTemplate / confluent-kafka)",
+        "REST endpoints exposed (OpenAPI) + called — regex AND tree-sitter AST for Java · Python · JS/TS",
+        "Required-vs-optional payload diffing — required-field changes flagged BREAKING, optional additions land as INFO",
+        "Kafka topics published/consumed (AsyncAPI + in-code KafkaTemplate / confluent-kafka), payload precision identical to REST",
         "Postgres schemas / tables — DDL (Flyway) + DML via SQL-in-code heuristics",
         "Shared file feeds on /shared/, /mnt/feeds/, /inbound/, /outbound/ — paired COBOL SELECT/ASSIGN",
         "Shared libraries via pom.xml / requirements.txt / pyproject / package.json",
+        "Hybrid platform tagging — CMDB-driven `platform` field merged into the graph; cross-boundary callouts at MR time",
     ], size=11)
 
     _add_text(s, Inches(0.6), Inches(5.2), Inches(12), Inches(0.4),
@@ -1142,19 +1274,22 @@ def build_a_integrations(prs, idx, total):
     _title_block(s, "Integration futures", eyebrow="Appendix · A6")
 
     _add_bullets(s, Inches(0.6), Inches(3.0), Inches(12.1), Inches(3.8), [
-        ("CMDB (read-only). ",   "Pull team / tier / on-call. Source of truth for ownership. "
-                                 "Sherlock writes nothing back to CMDB."),
+        ("CMDB (read-only). ",   "Pull team / tier / on-call / platform. Source of truth "
+                                 "for ownership. Sherlock writes nothing back to CMDB."),
         ("Backstage. ",          "Expose Sherlock's app graph as a Backstage plugin — "
                                  "embeds the canvas in the existing dev-portal."),
         ("APM (Dynatrace). ",    "Cross-validate runtime traces against static edges. "
                                  "Flag unused edges (static-only) and surprise edges "
                                  "(runtime-only) — both are signals."),
+        ("API / AI gateway adapter. ", "Read gateway routing tables to unravel calls "
+                                       "that look generic at the source ('GET /v1/...') but "
+                                       "fan out to many backend services."),
         ("Slack / Teams. ",      "Route impact notifications to on-call channels named in CMDB."),
         ("GitLab app / bot. ",   "Graduate from PAT to a proper GitLab app; per-group bot account; "
                                  "fine-grained scopes."),
         ("Control-M / schedulers. ", "Detect scheduled-job triggers that cross boundaries "
                                       "(read from shared fileserver, etc.)."),
-    ], size=12, line_spacing=1.4)
+    ], size=11, line_spacing=1.35)
 
     _notes(s, "Used when asked 'How does this fit with our existing tooling?' — answer: "
               "it plugs in, doesn't replace.")
@@ -1291,13 +1426,14 @@ def main():
         build_mr_moment,        # 8  — MR comment for BREAKING changes (for author)
         build_canvas,           # 9
         build_sticky_lifecycle, # 10 — impact::pending issues in DOWNSTREAM repos (for affected teams)
-        build_autodoc,          # 11 — per-app README MR in THAT APP's own repo (for owning team)
-        build_proof,            # 12
-        build_roadmap,          # 13
-        build_pilot_plan,       # 14
-        build_ask,              # 15
-        build_metrics,          # 16
-        build_close,            # 17
+        build_hybrid_platform,  # 11 — Azure / on-prem boundary callout — single graph, single workflow
+        build_autodoc,          # 12 — per-app README MR in THAT APP's own repo (for owning team)
+        build_proof,            # 13
+        build_roadmap,          # 14
+        build_pilot_plan,       # 15
+        build_ask,              # 16
+        build_metrics,          # 17
+        build_close,            # 18
     ]
     appx_builders = [
         build_appendix_divider,

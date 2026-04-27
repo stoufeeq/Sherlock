@@ -147,11 +147,16 @@ def _analyze_mr(
     breaks = compute_breaks(old_result, new_result)
     impacts = resolve_impact(breaks, driver=graph.driver, cmdb=cmdb)
 
+    # Look up the source app's platform from CMDB for cross-boundary call-outs.
+    source_svc = cmdb.get(app_name) or {}
+    source_platform = source_svc.get("platform")
+
     body = render_comment(
         source_app=app_name,
         source_commit=new_result.commit_sha,
         target_branch=target_branch,
         impacts=impacts,
+        source_platform=source_platform,
     )
 
     posted = None
@@ -167,6 +172,7 @@ def _analyze_mr(
         source_commit=new_result.commit_sha,
         impacts=impacts,
         project_lookup=lookup,
+        source_platform=source_platform,
     )
 
     return {

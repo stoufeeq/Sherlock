@@ -18,9 +18,11 @@ from app.impact.engine import ResolvedImpact
 
 LABEL_PENDING = "impact::pending"
 LABEL_FIXED = "impact::fixed"
+LABEL_CROSS_PLATFORM = "impact::cross-platform"
 LABEL_COLORS = {
-    LABEL_PENDING: "#F97316",  # orange
-    LABEL_FIXED: "#10B981",    # green
+    LABEL_PENDING: "#F97316",          # orange
+    LABEL_FIXED: "#10B981",            # green
+    LABEL_CROSS_PLATFORM: "#EC0016",   # UBS red — flags the cloud/on-prem boundary
 }
 
 
@@ -102,6 +104,7 @@ def apply_sticky_tags(
     source_commit: str | None,
     impacts: list[ResolvedImpact],
     project_lookup: dict[str, dict],  # app_name -> gitlab project dict
+    source_platform: str | None = None,
 ) -> list[IssueOutcome]:
     outcomes: list[IssueOutcome] = []
     for resolved in impacts:
@@ -112,10 +115,17 @@ def apply_sticky_tags(
                 continue
             project_id = proj["id"]
 
-            # Make sure both labels exist
+            # Make sure all labels exist (pending, fixed, cross-platform)
             for lbl_name, color in LABEL_COLORS.items():
                 gitlab.ensure_label(project_id, lbl_name, color,
                                     description="Managed by Sherlock — cross-app impact tag")
+
+            # Decide whether this issue is a cross-platform impact
+            is_cross_platform = bool(
+                source_platform and app.platform
+                and app.platform != source_platform
+                and app.platform != "library"
+            )
 
             marker = issue_marker(source_app=source_app, source_mr_iid=source_mr_iid, change=change)
             existing = gitlab.find_issue_by_marker(project_id, marker)
@@ -128,10 +138,13 @@ def apply_sticky_tags(
                 marker=marker,
             )
             if existing:
-                # refresh description; ensure label set to pending (reopen if previously closed)
                 labels = {lbl for lbl in existing.get("labels", [])}
                 labels.discard(LABEL_FIXED)
                 labels.add(LABEL_PENDING)
+                if is_cross_platform:
+                    labels.add(LABEL_CROSS_PLATFORM)
+                else:
+                    labels.discard(LABEL_CROSS_PLATFORM)
                 gitlab.update_issue(
                     project_id, existing["iid"],
                     labels=sorted(labels),
@@ -142,11 +155,14 @@ def apply_sticky_tags(
                                              issue_iid=existing["iid"],
                                              issue_url=existing.get("web_url")))
             else:
+                labels_for_new = [LABEL_PENDING]
+                if is_cross_platform:
+                    labels_for_new.append(LABEL_CROSS_PLATFORM)
                 new_issue = gitlab.create_issue(
                     project_id,
                     title=issue_title(source_app, change),
                     description=body,
-                    labels=[LABEL_PENDING],
+                    labels=labels_for_new,
                 )
                 outcomes.append(IssueOutcome(app=app.name, action="created",
                                              issue_iid=new_issue["iid"],

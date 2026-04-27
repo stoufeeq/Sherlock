@@ -54,6 +54,7 @@ class GraphClient:
         tier: int | None,
         runtime: str | None,
         project_id: int | None = None,
+        platform: str | None = None,
     ) -> None:
         """Create-or-update an Application. Also clears any stale archived/rename markers
         (so an app that comes back from archival is automatically un-archived)."""
@@ -65,6 +66,7 @@ class GraphClient:
                     a.team = $team,
                     a.tier = $tier,
                     a.runtime = $runtime,
+                    a.platform = $platform,
                     a.project_id = coalesce($project_id, a.project_id),
                     a.archived = false
                 REMOVE a.renamed_to, a.archived_at
@@ -74,6 +76,7 @@ class GraphClient:
                 team=team,
                 tier=tier,
                 runtime=runtime,
+                platform=platform,
                 project_id=project_id,
             )
 

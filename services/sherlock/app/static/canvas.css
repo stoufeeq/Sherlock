@@ -32,12 +32,30 @@ header .spacer { flex: 1; }
 
 main { display: flex; height: calc(100vh - 56px); }
 
-/* Sidebar */
+/* Sidebar — width controlled by --sidebar-width so the resizer can update it
+   live via JS. The divider line moves to the dedicated resizer below. */
+:root { --sidebar-width: 240px; }
 aside#sidebar {
-  width: 280px; flex-shrink: 0;
-  background: #FFFFFF; border-right: 1px solid #E5E5E5;
+  width: var(--sidebar-width); flex-shrink: 0;
+  background: #FFFFFF;
   padding: 16px; overflow-y: auto;
 }
+
+/* Resizable splitter between sidebar and canvas */
+#sidebar-resizer {
+  width: 5px; flex-shrink: 0; cursor: col-resize;
+  background: #E5E5E5;
+  transition: background 120ms ease;
+  position: relative;
+}
+#sidebar-resizer:hover,
+#sidebar-resizer.dragging { background: rgba(236, 0, 22, 0.55); /* UBS red */ }
+/* Slightly wider invisible hit-area so it's easier to grab */
+#sidebar-resizer::before {
+  content: ""; position: absolute; top: 0; bottom: 0;
+  left: -3px; right: -3px;
+}
+body.resizing { cursor: col-resize !important; user-select: none; }
 aside h2 {
   margin: 0 0 8px;
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px;
@@ -69,6 +87,11 @@ aside select {
 .chip-FILE        { background: rgba(20,184,166,0.16); color: #0F766E; }
 .chip-LIB         { background: rgba(100,116,139,0.16); color: #475569; }
 
+/* Platform legend chips — match the canvas ring colours */
+.chip-platform-azure   { background: rgba(0,120,212,0.14);  color: #075985; }
+.chip-platform-onprem  { background: rgba(75,85,99,0.14);   color: #374151; }
+.chip-platform-library { background: rgba(180,180,180,0.18); color: #4B5563; }
+
 /* Segmented control (view mode) */
 .seg {
   display: flex; background: #FFFFFF;
@@ -83,6 +106,52 @@ aside select {
 
 .hint { color: #777; font-size: 11px; margin: 8px 0 0; line-height: 1.4; }
 .hidden { display: none !important; }
+
+/* Filter bar — sits above the canvas; replaces the sidebar filter sections */
+#filter-bar {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 14px; row-gap: 8px;
+  padding: 8px 16px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5E5;
+  flex-shrink: 0;
+  font-size: 12px;
+  min-height: 44px;
+}
+.filter-group {
+  display: inline-flex; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+.filter-group + .filter-group {
+  border-left: 1px solid #E5E5E5;
+  padding-left: 14px;
+}
+.filter-group.hidden { display: none !important; }
+.filter-label {
+  color: #888; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.6px; font-weight: 700;
+}
+#filter-bar label {
+  display: inline-flex; align-items: center; gap: 5px;
+  cursor: pointer; user-select: none; color: #333; padding: 0;
+}
+#filter-bar label input[type="checkbox"] { margin: 0; }
+#filter-bar select {
+  padding: 4px 6px; background: #FFFFFF; color: #1A1A1A;
+  border: 1px solid #D0D0D0; border-radius: 4px;
+  font-size: 12px;
+}
+#filter-bar .seg { /* tighten the segmented control for inline use */
+  border-radius: 4px;
+}
+#filter-bar .seg-btn {
+  flex: 0 0 auto;          /* override the sidebar's flex:1 so buttons size to content */
+  padding: 5px 12px;
+  font-size: 12px;
+  white-space: nowrap;     /* keep "Contract view" on one line */
+}
+#filter-bar .archived-toggle { color: #555; }
+#filter-bar .hint { margin: 0; color: #999; font-size: 10px; }
 
 /* App list */
 .app-list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; }
@@ -138,6 +207,13 @@ button:disabled { background: #E5E5E5; color: #999; cursor: not-allowed; }
 .autodoc-status.error   { background: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; }
 .autodoc-status a       { color: inherit; text-decoration: underline; font-weight: 500; }
 
-/* Canvas */
-#canvas-wrap { flex: 1; position: relative; }
-#cy { position: absolute; inset: 0; background: #FFFFFF; }
+/* Canvas — flex column so the filter bar stacks above #cy */
+#canvas-wrap {
+  flex: 1; display: flex; flex-direction: column;
+  min-width: 0;     /* let the canvas shrink with the viewport */
+  min-height: 0;
+}
+#cy {
+  flex: 1; background: #FFFFFF;
+  min-height: 0;    /* required for flex-children that contain absolute-sized canvases */
+}

@@ -56,7 +56,15 @@ const NODE_STYLE_BASE = [
   { selector: ".impact",  style: { "background-color": "#F97316", "border-width": 2, "border-color": "#EA580C" } },
   { selector: ".impact-edge", style: { "line-color": "#F97316", "target-arrow-color": "#F97316", "width": 2.5 } },
 
-  // Archived apps — faded, dashed border
+  // Platform-coloured ring on Application nodes — visible cross-boundary marker
+  { selector: 'node[label="Application"][platform = "azure"]',
+    style: { "border-width": 3, "border-color": "#0078D4" /* Azure blue */ } },
+  { selector: 'node[label="Application"][platform = "on-prem"]',
+    style: { "border-width": 3, "border-color": "#6B7280" /* slate */ } },
+  { selector: 'node[label="Application"][platform = "library"]',
+    style: { "border-width": 2, "border-color": "#CBD5E1", "border-style": "dotted" } },
+
+  // Archived apps — faded, dashed border (overrides platform ring)
   {
     selector: 'node[label="Application"][?archived]',
     style: {
@@ -181,6 +189,7 @@ async function init() {
   }
 
   document.getElementById("team-filter").addEventListener("change", render);
+  document.getElementById("platform-filter").addEventListener("change", render);
   document.getElementById("mode-app").addEventListener("click", () => setMode("app"));
   document.getElementById("mode-contract").addEventListener("click", () => setMode("contract"));
   document.getElementById("impact-downstream").addEventListener("click", () => showImpact("downstream"));
@@ -197,8 +206,73 @@ async function init() {
     render();
   });
 
+  setupSidebarResize();
   renderSidebar();
   setMode("app");
+}
+
+// --- Resizable sidebar -------------------------------------------------------
+
+function setupSidebarResize() {
+  const STORAGE_KEY = "sherlock.sidebarWidth";
+  const MIN = 180;
+  const MAX = 480;
+  const DEFAULT = 240;
+
+  const root = document.documentElement;
+  const resizer = document.getElementById("sidebar-resizer");
+  if (!resizer) return;
+
+  const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+  if (Number.isFinite(saved) && saved >= MIN && saved <= MAX) {
+    root.style.setProperty("--sidebar-width", saved + "px");
+  }
+
+  let dragging = false;
+  let pendingResize = null;
+
+  function applyWidth(px) {
+    const w = Math.max(MIN, Math.min(MAX, px));
+    root.style.setProperty("--sidebar-width", w + "px");
+    if (cy && !pendingResize) {
+      // Throttle cy.resize() to one per animation frame for smoothness
+      pendingResize = requestAnimationFrame(() => {
+        cy.resize();
+        pendingResize = null;
+      });
+    }
+  }
+
+  resizer.addEventListener("mousedown", (e) => {
+    dragging = true;
+    document.body.classList.add("resizing");
+    resizer.classList.add("dragging");
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    applyWidth(e.clientX);
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove("resizing");
+    resizer.classList.remove("dragging");
+    const current = parseInt(getComputedStyle(root).getPropertyValue("--sidebar-width"), 10);
+    if (Number.isFinite(current)) {
+      localStorage.setItem(STORAGE_KEY, String(current));
+    }
+    if (cy) cy.resize();
+  });
+
+  // Double-click to restore default width
+  resizer.addEventListener("dblclick", () => {
+    root.style.setProperty("--sidebar-width", DEFAULT + "px");
+    localStorage.removeItem(STORAGE_KEY);
+    if (cy) cy.resize();
+  });
 }
 
 function setMode(next) {
@@ -228,8 +302,10 @@ function renderStats(graph) {
 function renderSidebar() {
   const listEl = document.getElementById("app-list");
   const teamEl = document.getElementById("team-filter");
+  const platformEl = document.getElementById("platform-filter");
   const hintEl = document.getElementById("archived-hint");
   const teams = new Set();
+  const platforms = new Set();
   listEl.innerHTML = "";
 
   const visible = showArchived ? appsList : appsList.filter((a) => !a.archived);
@@ -237,13 +313,18 @@ function renderSidebar() {
 
   for (const a of visible) {
     if (a.team) teams.add(a.team);
+    if (a.platform) platforms.add(a.platform);
     const li = document.createElement("li");
     li.dataset.name = a.name;
     if (a.archived) li.classList.add("archived");
     const renameNote = a.renamed_to ? ` → <span class="team">renamed to ${a.renamed_to}</span>` : "";
+    const platformBadge = a.platform
+      ? `<span class="team" style="background:${PLATFORM_BG[a.platform] || "transparent"};color:${PLATFORM_FG[a.platform] || "#666"};padding:0 4px;border-radius:3px;border:0;">${a.platform}</span>`
+      : "";
     li.innerHTML = `
       <span class="name">${a.name}${renameNote}</span>
       <span>
+        ${platformBadge}
         <span class="team">${a.team || "—"}</span>
         ${a.tier != null ? `<span class="tier">T${a.tier}</span>` : ""}
       </span>`;
@@ -257,7 +338,7 @@ function renderSidebar() {
     listEl.appendChild(li);
   }
 
-  // team filter — only refresh when first populated (avoid duplicate <option>s)
+  // Filters — only refresh when first populated (avoid duplicate <option>s)
   if (teamEl.options.length <= 1) {
     for (const t of [...teams].sort()) {
       const opt = document.createElement("option");
@@ -266,14 +347,34 @@ function renderSidebar() {
       teamEl.appendChild(opt);
     }
   }
+  if (platformEl.options.length <= 1) {
+    for (const p of [...platforms].sort()) {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      platformEl.appendChild(opt);
+    }
+  }
 
   hintEl.textContent = archivedCount
     ? `${archivedCount} archived app${archivedCount > 1 ? "s" : ""} in the graph.`
     : "No archived apps.";
 }
 
+const PLATFORM_BG = {
+  azure:    "rgba(0,120,212,0.14)",
+  "on-prem": "rgba(75,85,99,0.14)",
+  library:  "rgba(180,180,180,0.18)",
+};
+const PLATFORM_FG = {
+  azure:    "#075985",
+  "on-prem": "#374151",
+  library:  "#4B5563",
+};
+
 function render() {
   const team = document.getElementById("team-filter").value;
+  const platform = document.getElementById("platform-filter").value;
 
   let filteredNodes, filteredEdges, graphForStats;
 
@@ -283,7 +384,11 @@ function render() {
       if (document.getElementById(`toggle-kind-${k}`)?.checked) activeKinds.add(k);
     }
     graphForStats = appGraph;
-    filteredNodes = appGraph.nodes.filter((n) => !team || n.data.team === team);
+    filteredNodes = appGraph.nodes.filter((n) => {
+      if (team && n.data.team !== team) return false;
+      if (platform && n.data.platform !== platform) return false;
+      return true;
+    });
     const allowedIds = new Set(filteredNodes.map((n) => n.data.id));
     filteredEdges = appGraph.edges.filter((e) =>
       activeKinds.has(e.data.kind) && allowedIds.has(e.data.source) && allowedIds.has(e.data.target)
@@ -298,6 +403,7 @@ function render() {
     for (const n of contractGraph.nodes) {
       const d = n.data;
       if (!activeLabels.has(d.label)) continue;
+      if (platform && d.label === "Application" && d.platform !== platform) continue;
       if (team && d.label === "Application" && d.team !== team) continue;
       nodeSet.add(d.id);
     }
