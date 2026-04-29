@@ -17,6 +17,7 @@ from app.graph.client import GraphClient
 from app.graph_api import router as graph_api_router
 from app.impact.diff import compute_breaks
 from app.impact.engine import resolve as resolve_impact
+from app.impact.predictive import analyze_diff as predictive_analyze
 from app.impact.report import COMMENT_MARKER, render_comment
 from app.impact.sticky import apply_sticky_tags
 from app.llm.factory import get_llm
@@ -205,6 +206,46 @@ def analyze_mr(req: AnalyzeMRRequest) -> dict:
         graph=app.state.graph,
         cmdb=app.state.cmdb,
     )
+
+
+# ---------- Pre-commit / pre-push impact analysis ------------------------------
+
+
+class AnalyzeDiffRequest(BaseModel):
+    """Same engine as /analyze-mr, but takes an in-flight working-tree snapshot
+    instead of a branch ref. Used by the VS Code extension and the git pre-push
+    hook to surface impact BEFORE code is pushed. No GitLab side-effects."""
+
+    app_name: str
+    base_ref: str = "main"
+    # Map of repo-relative path -> new file content. Send only the files that
+    # changed (and any new files); the rest comes from the base_ref clone.
+    working_files: dict[str, str] = {}
+    # Files that were deleted in the working tree relative to base_ref.
+    deleted_files: list[str] = []
+
+
+@app.post("/analyze-diff")
+def analyze_diff_endpoint(req: AnalyzeDiffRequest) -> dict:
+    lookup = project_lookup(app.state.gitlab)
+    if req.app_name not in lookup:
+        raise HTTPException(
+            status_code=404,
+            detail=f"project '{req.app_name}' not in groups {settings.groups_list}",
+        )
+    try:
+        return predictive_analyze(
+            app_name=req.app_name,
+            base_ref=req.base_ref,
+            working_files=req.working_files,
+            deleted_files=req.deleted_files,
+            gitlab=app.state.gitlab,
+            driver=app.state.graph.driver,
+            cmdb=app.state.cmdb,
+            project_lookup=lookup,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ---------- GitLab webhook -----------------------------------------------------

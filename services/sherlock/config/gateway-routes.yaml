@@ -1,0 +1,29 @@
+# APIGEE-style gateway routing table.
+#
+# In production this would come straight out of an APIGEE proxy bundle export.
+# Each `gateway` corresponds to a deployed proxy; each `route` is a base-path
+# rule mapping the public URL to a backend application + base path.
+#
+# Sherlock uses this at scan-time:
+#   1. caller code says    https://api.ubs.com/banking/v1/accounts/{id}
+#   2. resolver matches    host=api.ubs.com  basepath=/banking/v1/accounts
+#   3. resolver rewrites to (target_app=account-service, path=/accounts/{*})
+#   4. graph CALLS edge is drawn to the real backend with via_gateway=apigee
+#
+# Apps not listed here keep their direct calls — the same canvas can show both.
+
+gateways:
+  - name: apigee
+    hosts:
+      - api.ubs.com
+      - api-uat.ubs.com
+    routes:
+      - basepath: /banking/v1/accounts
+        target_app: account-service
+        target_basepath: /accounts
+      - basepath: /banking/v1/customers
+        target_app: customer-service
+        target_basepath: /customers
+      - basepath: /banking/v1/notifications
+        target_app: notification-service
+        target_basepath: /notifications

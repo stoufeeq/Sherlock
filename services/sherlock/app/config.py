@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     azure_openai_deployment: str = ""
     azure_openai_api_version: str = "2024-06-01"
 
+    # API gateway routing config — APIGEE-style bundle of basepath→target_app rules.
+    # When a CALLS triple's host matches a gateway entry, the resolver rewrites it to
+    # the backend app + path so the graph CALLS edge points at the real provider, with
+    # via_gateway=<name> recorded on the edge.
+    gateway_config_path: str = "/etc/sherlock/gateway-routes.yaml"
+
     # Autodoc
     autodoc_branch_prefix: str = "sherlock/autodoc"
     autodoc_mr_label: str = "sherlock::autodoc"

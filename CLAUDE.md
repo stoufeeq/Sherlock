@@ -25,9 +25,12 @@ Six work loops are complete and end-to-end demoable:
 | **5A** | Periodic reconciler (`/api/reconciler/*`) — auto-discovers new GitLab projects, installs webhooks, refreshes CMDB metadata. Multi-group via `GITLAB_GROUPS`. |
 | **5B** | Archival + rename detection via stable `project_id` tracking; parallel scan via `ThreadPoolExecutor`. |
 | **6** | LLM-backed auto-documentation — pluggable provider (`mock` / `gemini` / `azure_openai`), per-app draft MR with a marker-delimited Sherlock section in `README.md`. UI button. |
+| **— hybrid platform** | CMDB-driven `platform` field (azure / on-prem / library) merged into the graph. Cross-platform impacts surface a 🚨 banner in the MR comment, an `impact::cross-platform` label on sticky issues, and coloured rings (Azure blue / slate) on the canvas. |
+| **— api gateway** | APIGEE-style gateway resolver: caller hits `https://api.ubs.com/banking/v1/...`, Sherlock loads `services/sherlock/config/gateway-routes.yaml`, rewrites to the real backend app + path, and stamps `via_gateway` on the CALLS edge so the canvas dashes it red. Mixed estate supported (some apps direct, some via gateway). Both BFFs in the fixture demonstrate the mix. |
+| **— shift-left** | `POST /analyze-diff` runs the same engine as the MR bot but takes an in-flight `working_files` map + `deleted_files` list — no MR, no GitLab side-effects. Powers `scripts/sherlock-impact-check.sh`, which clones the diff vs `origin/main`, posts to the endpoint, and prints a coloured summary of breaks + cross-platform impacts. Install as a git pre-push hook with `make install-pre-push repo=<path>`. Foundation for the future VS Code extension. |
 
 A CTO pitch deck is generated from `tools/deck/generate.py` into
-[Sherlock_CTO_Pitch.pptx](Sherlock_CTO_Pitch.pptx) (27 slides, UBS-themed).
+[Sherlock_CTO_Pitch.pptx](Sherlock_CTO_Pitch.pptx) (28 slides, UBS-themed).
 
 ---
 
@@ -63,10 +66,12 @@ Sherlock/
 │   │       │   ├── asyncapi.py       # publish/subscribe topics + payload hash
 │   │       │   ├── sql.py            # DDL + DML heuristics; schema ownership
 │   │       │   ├── code_refs.py      # outbound HTTP host + (method, path) per language
+│   │       │   ├── api_gateway.py    # APIGEE-style resolver: rewrites gateway URLs to backend apps; stamps via_gateway on CALLS edges
 │   │       │   └── files.py          # shared-volume file I/O incl. COBOL SELECT/ASSIGN
 │   │       ├── impact/
 │   │       │   ├── diff.py     # AnalysisResult diff → BreakingChange list
 │   │       │   ├── engine.py   # walk graph for affected apps; CMDB enrichment
+│   │       │   ├── predictive.py    # /analyze-diff: shift-left impact (working-tree overlay → diff → impacts JSON, no MR side-effects)
 │   │       │   ├── report.py   # markdown rendering for MR comment
 │   │       │   └── sticky.py   # impact::pending issue lifecycle
 │   │       ├── llm/
@@ -164,6 +169,7 @@ cd tools/deck && .venv/bin/python generate.py
 | REST endpoints exposed | `openapi.yaml` paths + req/res schema hashes | (language-agnostic) |
 | REST calls outbound | `.uri("/...")` (Java) · `.get("/...")` (Python httpx) · `http.get('/...')` (axios) | Java · Python · JS/TS |
 | Path normalization | `{id}` / `${var}` / `{account_id}` → `{*}` so caller and exposer match | all |
+| API gateway unravelling | `services/sherlock/config/gateway-routes.yaml` (APIGEE-bundle-shaped); resolver rewrites `host=api.ubs.com path=/banking/v1/...` to `target_app + backend_path`; CALLS edge stamped with `via_gateway=<name>` and rendered dashed-red on the canvas | (host-agnostic) |
 | Events published / consumed | `asyncapi.yaml` channels + payload-hash for shape changes | (language-agnostic) |
 | Database tables | `CREATE TABLE schema.table` + `FROM schema.table` heuristics + Flyway YAML schema ownership | SQL + Java/Python/COBOL |
 | Shared file feeds | path string literals on `/shared/`, `/mnt/feeds/`, `/inbound/`, `/outbound/` + classification by nearby keywords; COBOL `SELECT/ASSIGN` + `OPEN INPUT/OUTPUT` parsed authoritatively | Java · Python · JS · **COBOL** |
@@ -190,6 +196,7 @@ Write endpoints:
 
 - `POST /scan-all` · `POST /scan/{app}` — manual full or per-app rescan
 - `POST /analyze-mr` — analyze an MR (body: `app_name`, `mr_iid`, `source_branch`, `post_comment`)
+- `POST /analyze-diff` — shift-left: same engine, takes `working_files` + `deleted_files` in the request body, returns impacts JSON (no MR, no sticky issues)
 - `POST /webhooks/gitlab` — Push + Merge Request hooks (token-authed)
 - `POST /api/reconciler/trigger` — kick off an immediate reconcile pass
 - `POST /api/autodoc/trigger/{app}` — generate / refresh autodoc MR for one app
@@ -200,11 +207,12 @@ Write endpoints:
 
 | Trigger | Where it lands | Reviewed by |
 |---|---|---|
+| Developer edits code locally | Pre-push hook prints impact summary in the terminal (no GitLab side-effect) | The developer themselves |
 | Author opens a breaking-change MR | Comment on the **author's own MR** | Author's own team |
 | Same event | `impact::pending` issue in **each downstream repo** (sticky tag) | Each affected team |
 | Manual or scheduled autodoc trigger | Draft README MR in **the app's own repo** | App's own team |
 
-Autodoc does **not** propagate to downstream repos. That's the sticky-tag flow.
+Autodoc does **not** propagate to downstream repos. That's the sticky-tag flow. The pre-push hook is the same engine as the MR comment — just earlier in the loop.
 
 ---
 
@@ -243,6 +251,7 @@ Autodoc does **not** propagate to downstream repos. That's the sticky-tag flow.
 - **GitLab Group-level webhooks** — reconciler is the substitute (≤60s discovery latency).
 - **CI component** that teams `include:` from `.gitlab-ci.yml` — webhooks-only today.
 - **Multi-hop impact traversal** — `/api/impact/{app}` is single-hop.
+- **VS Code extension** for shift-left — only the `/analyze-diff` API + git pre-push hook exist today. Extension is the next slice.
 - **`impact::acknowledged` flow** for downstream teams to dismiss without closing.
 - **Scheduled remote agents** for periodic doc regeneration of stale repos.
 

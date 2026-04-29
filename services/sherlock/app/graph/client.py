@@ -176,25 +176,31 @@ class GraphClient:
                 deprecated=is_deprecated,
             )
 
-        # Called endpoints (resolve host to app → endpoint node)
+        # Called endpoints (resolve host to app → endpoint node).
+        # `gateway_resolved[(target_app, method, path)] = gateway_name` when the
+        # resolver rewrote a gateway URL — stamped on the CALLS relationship so
+        # the canvas can render "via apigee" instead of pretending the call was direct.
         for host, method, path in result.called_endpoints:
             target_app = host_to_app.get(host)
             if not target_app:
                 continue
             eid = f"{target_app}:{method}:{path}"
+            via_gateway = result.gateway_resolved.get((target_app, method, path))
             tx.run(
                 """
                 MERGE (e:Endpoint {id:$id})
                   ON CREATE SET e.method=$method, e.path=$path, e.host=$target
                 WITH e
                 MATCH (a:Application {name:$app})
-                MERGE (a)-[:CALLS]->(e)
+                MERGE (a)-[r:CALLS]->(e)
+                SET r.via_gateway = $via_gateway
                 """,
                 id=eid,
                 method=method,
                 path=path,
                 target=target_app,
                 app=app,
+                via_gateway=via_gateway,
             )
 
         # Published / consumed topics — full + required-only payload hashes

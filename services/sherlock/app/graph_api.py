@@ -113,7 +113,9 @@ def _fetch_all(driver, *, include_archived: bool = False) -> dict:
                 "name": row["path"], "path": row["path"], "extension": row["extension"],
             })
 
-        # All edges — we map their endpoint IDs to our prefixed node IDs
+        # All edges — we map their endpoint IDs to our prefixed node IDs.
+        # `via_gateway` is only set on CALLS relationships rewritten by the
+        # API-gateway resolver; the canvas uses it to dash + tint those edges.
         q = """
         MATCH (x)-[r]->(y)
         WHERE type(r) IN $kinds
@@ -122,12 +124,16 @@ def _fetch_all(driver, *, include_archived: bool = False) -> dict:
           coalesce(x.name, x.gav, x.fqn, x.id, x.path) AS x_key,
           labels(y)[0] AS y_label,
           coalesce(y.name, y.gav, y.fqn, y.id, y.path) AS y_key,
-          type(r) AS kind
+          type(r) AS kind,
+          r.via_gateway AS via_gateway
         """
         for i, row in enumerate(s.run(q, kinds=EDGE_KINDS)):
             src = _node_id(row["x_label"], row["x_key"])
             tgt = _node_id(row["y_label"], row["y_key"])
-            edges.append({"data": {"id": f"e{i}", "source": src, "target": tgt, "kind": row["kind"]}})
+            data = {"id": f"e{i}", "source": src, "target": tgt, "kind": row["kind"]}
+            if row.get("via_gateway"):
+                data["via_gateway"] = row["via_gateway"]
+            edges.append({"data": data})
 
     return {"nodes": nodes, "edges": edges}
 
@@ -226,40 +232,54 @@ def app_graph(request: Request, include_archived: bool = False) -> dict:
             add_app(dict(row))
 
         # REST: consumer -[CALLS]-> endpoint <-[EXPOSES]- producer
+        # `via_gateway` (when set) means the resolver rewrote a gateway URL — the
+        # canvas can colour the edge differently to make the indirection visible.
         for i, row in enumerate(s.run(
             """
-            MATCH (a:Application)-[:CALLS]->(e:Endpoint)<-[:EXPOSES]-(b:Application)
+            MATCH (a:Application)-[r:CALLS]->(e:Endpoint)<-[:EXPOSES]-(b:Application)
             WHERE a.name <> b.name
             RETURN a.name AS consumer, b.name AS producer,
-                   e.method AS method, e.path AS path
+                   e.method AS method, e.path AS path,
+                   r.via_gateway AS via_gateway
             """
         )):
+            via = row.get("via_gateway")
+            label = f"{row['method']} {row['path']}"
+            if via:
+                label += f"  (via {via})"
             edges.append({"data": {
                 "id": f"rest-{i}",
                 "source": _node_id("Application", row["consumer"]),
                 "target": _node_id("Application", row["producer"]),
                 "kind": "REST",
-                "label": f"{row['method']} {row['path']}",
+                "label": label,
+                "via_gateway": via,
             }})
 
         # REST host-only fallback: consumer -[CALLS]-> endpoint{host:X} when no matching EXPOSES
         for i, row in enumerate(s.run(
             """
-            MATCH (a:Application)-[:CALLS]->(e:Endpoint)
+            MATCH (a:Application)-[r:CALLS]->(e:Endpoint)
             WHERE NOT ( ()-[:EXPOSES]->(e) )
               AND e.host IS NOT NULL
               AND e.host <> a.name
             MATCH (b:Application {name: e.host})
             RETURN a.name AS consumer, b.name AS producer,
-                   e.method AS method, e.path AS path
+                   e.method AS method, e.path AS path,
+                   r.via_gateway AS via_gateway
             """
         )):
+            via = row.get("via_gateway")
+            label = f"{row['method']} {row['path']} (host-only)"
+            if via:
+                label += f"  (via {via})"
             edges.append({"data": {
                 "id": f"rest-h-{i}",
                 "source": _node_id("Application", row["consumer"]),
                 "target": _node_id("Application", row["producer"]),
                 "kind": "REST",
-                "label": f"{row['method']} {row['path']} (host-only)",
+                "label": label,
+                "via_gateway": via,
             }})
 
         # EVENT: consumer -[CONSUMES]-> topic <-[PUBLISHES]- producer

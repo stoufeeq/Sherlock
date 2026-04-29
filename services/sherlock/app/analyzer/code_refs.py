@@ -24,8 +24,12 @@ URL_RE = re.compile(
 )
 SKIP_HOSTS = {"localhost", "127.0.0.1", "example.com", "kafka", "redpanda"}
 
-# Token that the URL must "belong to" an app name — hyphenated, lowercase
-APP_HOST_RE = re.compile(r"^[a-z0-9][a-z0-9\-]+$")
+# Token the URL must "belong to": either an internal app name (hyphenated lowercase)
+# or a dotted FQDN like `api.ubs.com` — the latter is admitted so the API-gateway
+# resolver can rewrite gateway URLs to their backend apps. Unresolved FQDNs that
+# don't match a gateway entry are filtered out downstream by graph/client.py
+# (host_to_app lookup returns None → no edge written).
+APP_HOST_RE = re.compile(r"^[a-z0-9][a-z0-9\-\.]+$")
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 

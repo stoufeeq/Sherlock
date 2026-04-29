@@ -1,11 +1,12 @@
 import axios from 'axios';
 
-const baseURL = process.env.CUSTOMER_SERVICE_URL || 'http://customer-service:8080';
+// Customer traffic is also fronted by APIGEE.
+const baseURL = process.env.APIGEE_BASE_URL || 'https://api.ubs.com';
 const http = axios.create({ baseURL, timeout: 2000 });
 
 export const customerClient = {
   async get(id) {
-    const { data } = await http.get(`/customers/${id}`);
+    const { data } = await http.get(`/banking/v1/customers/${id}`);
     return data;
   },
 };

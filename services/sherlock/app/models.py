@@ -54,3 +54,8 @@ class AnalysisResult:
     # Shared-filesystem feed paths this app reads or writes (e.g. "/shared/postings/POSTINGS.DAT")
     read_files: list[str] = field(default_factory=list)
     written_files: list[str] = field(default_factory=list)
+    # Gateway-resolved CALLS provenance — keyed on the BACKEND triple
+    # (target_app, method, backend_path) after rewrite. Value is the gateway name.
+    # Lets the graph writer stamp `via_gateway` on the CALLS edge so the canvas
+    # can show "via apigee" instead of pretending the call was direct.
+    gateway_resolved: dict[tuple[str, str, str], str] = field(default_factory=dict)

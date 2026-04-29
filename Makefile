@@ -1,5 +1,6 @@
 .PHONY: up down clean logs logs-gitlab logs-sherlock status bootstrap gitlab-root-password \
-        webhooks scan-all scan neo4j sherlock-build sherlock-logs demo-break help
+        webhooks scan-all scan neo4j sherlock-build sherlock-logs demo-break \
+        impact-check install-pre-push help
 
 help:
 	@echo "Sherlock local dev targets"
@@ -24,6 +25,10 @@ help:
 	@echo "  make webhooks              — register GitLab webhooks pointing at Sherlock"
 	@echo "  make demo-break            — open a demo MR that breaks account-service's API"
 	@echo "  make neo4j                 — print Neo4j browser URL + credentials"
+	@echo ""
+	@echo " Shift-left (pre-commit / pre-push impact analysis)"
+	@echo "  make impact-check repo=<path>            — run shift-left impact check on a working tree"
+	@echo "  make install-pre-push repo=<path>        — install hook into <path>/.git/hooks/pre-push"
 
 up:
 	docker compose up -d
@@ -73,6 +78,16 @@ webhooks:
 
 demo-break:
 	./scripts/demo-breaking-change.sh
+
+impact-check:
+	@test -n "$(repo)" || (echo "usage: make impact-check repo=<path-to-fixture-or-repo>" && exit 1)
+	@cd $(repo) && $(CURDIR)/scripts/sherlock-impact-check.sh
+
+install-pre-push:
+	@test -n "$(repo)" || (echo "usage: make install-pre-push repo=<path-to-fixture-or-repo>" && exit 1)
+	@test -d "$(repo)/.git/hooks" || (echo "$(repo)/.git/hooks not found" && exit 1)
+	@ln -sf $(CURDIR)/scripts/sherlock-impact-check.sh $(repo)/.git/hooks/pre-push
+	@echo "installed: $(repo)/.git/hooks/pre-push -> scripts/sherlock-impact-check.sh"
 
 neo4j:
 	@echo "Neo4j Browser:  http://localhost:$${NEO4J_HTTP_PORT:-7474}"

@@ -42,6 +42,9 @@ FONT_SANS = "Arial"   # swap to "UBS Sans" or "Frutiger UBS" if installed
 FONT_MONO = "Consolas"
 
 OUT_PATH = Path(__file__).resolve().parents[2] / "Sherlock_CTO_Pitch.pptx"
+# Official UBS keys+UBS lockup, sized to match the previous text-mark footprint.
+# When missing, _header falls back to the prior text-mark so the deck still builds.
+UBS_LOGO_PATH = Path(__file__).resolve().parents[2] / "UBS-logo.png"
 
 
 # ---------- low-level helpers -------------------------------------------------
@@ -138,15 +141,23 @@ def _notes(slide, text):
 # ---------- slide chrome ------------------------------------------------------
 
 def _header(slide, section_label="MAIN"):
-    # UBS text-mark group (REPLACE with official logo)
-    # three small red accent bars (approximation of the UBS keys visual cue)
-    for i in range(3):
-        y = Inches(0.22 + i * 0.11)
-        _add_rect(slide, Inches(0.32), y, Inches(0.22), Inches(0.04), fill=UBS_RED)
-    # UBS letters
-    _add_text(slide, Inches(0.60), Inches(0.18), Inches(1.2), Inches(0.45),
-              "UBS", font=FONT_SANS, size=22, bold=True, color=BLACK,
-              anchor=MSO_ANCHOR.TOP)
+    # Real UBS keys+UBS lockup. Sized to occupy roughly the same visual footprint
+    # as the previous text-mark (height ~0.5"; aspect 1.67:1 → width ~0.83").
+    # Falls back to the prior text-mark if the file is missing, so the deck still
+    # builds in environments without the brand asset.
+    if UBS_LOGO_PATH.is_file():
+        slide.shapes.add_picture(
+            str(UBS_LOGO_PATH),
+            Inches(0.35), Inches(0.18),
+            height=Inches(0.5),
+        )
+    else:
+        for i in range(3):
+            y = Inches(0.22 + i * 0.11)
+            _add_rect(slide, Inches(0.32), y, Inches(0.22), Inches(0.04), fill=UBS_RED)
+        _add_text(slide, Inches(0.60), Inches(0.18), Inches(1.2), Inches(0.45),
+                  "UBS", font=FONT_SANS, size=22, bold=True, color=BLACK,
+                  anchor=MSO_ANCHOR.TOP)
     # section label + placeholder caption (right)
     _add_text(slide, Inches(10.6), Inches(0.25), Inches(2.5), Inches(0.3),
               section_label, font=FONT_SANS, size=9, color=MID_GREY,
@@ -240,7 +251,8 @@ def build_exec_summary(prs, idx, total):
          "Sherlock — the live dependency graph of UBS.",
          "Auto-maps every application's upstream/downstream surface from source "
          "code: REST, events, DB, shared files, libraries. Flags potential "
-         "breakage on every MR, with the right team tagged and on-call channel named."),
+         "breakage in the developer's terminal at push, on every MR, and as a "
+         "sticky issue in each affected repo — with the right team tagged and on-call channel named."),
         ("Ask",
          "3-month funded pilot · 2–3 FTEs · platform embed.",
          "One pilot domain, measurable MTTD reduction, ready-to-scale platform. "
@@ -310,7 +322,7 @@ def build_gap(prs, idx, total):
     _title_block(s, "The visibility gap nobody owns",
                  eyebrow="Why existing tools don't close this",
                  subtitle="Existing tools each solve part of the picture. None closes the loop "
-                          "between code-change and cross-app impact, at MR time.")
+                          "between a code change and its cross-app impact — not at push, not at MR, not after merge.")
 
     rows = [
         ("CMDB / service catalog",  "Good for ownership. Stale topology within weeks — "
@@ -569,6 +581,111 @@ def build_mr_moment(prs, idx, total):
     _notes(s, "This is the 'aha' slide. If possible, open http://localhost:8001 in a browser "
               "and show the live canvas during this moment. If not, the mock here is accurate "
               "to what a real MR comment looks like — cross-platform callout banner included.")
+    return s
+
+
+def build_shift_left(prs, idx, total):
+    s = _blank_slide(prs); _header(s); _footer(s, idx, total)
+    _title_block(s, "The same engine — earlier in the loop",
+                 eyebrow="Shift-left feedback",
+                 subtitle="Engineers see downstream impact in their terminal — and soon in their IDE — "
+                          "before code ever leaves their machine.")
+
+    # ---- Left: timeline of feedback loops ---------------------------------
+    tl_x = Inches(0.6); tl_y = Inches(2.95); tl_w = Inches(7.5); tl_h = Inches(4.1)
+    _add_rect(s, tl_x, tl_y, tl_w, tl_h, fill=CARD_BG, line=LINE_GREY)
+
+    # axis line at the top with "earlier" → "later" labels
+    axis_y = tl_y + Inches(0.5)
+    _add_rect(s, tl_x + Inches(0.4), axis_y, tl_w - Inches(0.8), Inches(0.02), fill=MID_GREY)
+    _add_text(s, tl_x + Inches(0.4), axis_y + Inches(0.1), Inches(2.5), Inches(0.3),
+              "EARLIER IN THE DEV LOOP →", size=8, bold=True, color=MID_GREY)
+    _add_text(s, tl_x + tl_w - Inches(2.9), axis_y + Inches(0.1), Inches(2.5), Inches(0.3),
+              "→ LATER", size=8, bold=True, color=MID_GREY, align=PP_ALIGN.RIGHT)
+
+    loops = [
+        ("IDE / pre-push", "scripts/sherlock-impact-check.sh\n+ POST /analyze-diff",
+         "Developer sees impact\nin their own terminal", "NEW", UBS_RED),
+        ("MR comment", "POST /analyze-mr\nfires on MR open / update",
+         "Author sees impact\non their own MR", "EXISTING", BLACK),
+        ("Sticky issue", "impact::pending in each\ndownstream repo",
+         "Affected teams pick up\nin their queue", "EXISTING", BLACK),
+        ("Autodoc MR", "POST /api/autodoc/\ntrigger/{app}",
+         "App's own team reviews\ndraft README MR", "EXISTING", BLACK),
+    ]
+    col_w = (tl_w - Inches(0.8)) / 4
+    for i, (head, code, body, badge, accent) in enumerate(loops):
+        cx = tl_x + Inches(0.4) + col_w * i
+        # marker dot on axis
+        _add_rect(s, cx + col_w/2 - Inches(0.06), axis_y - Inches(0.05),
+                  Inches(0.12), Inches(0.12), fill=accent)
+        # label card
+        cy = axis_y + Inches(0.55)
+        ch = Inches(2.7)
+        _add_rect(s, cx + Inches(0.1), cy, col_w - Inches(0.2), ch,
+                  fill=WHITE, line=LINE_GREY)
+        _add_rect(s, cx + Inches(0.1), cy, col_w - Inches(0.2), Inches(0.05),
+                  fill=accent)
+        _add_text(s, cx + Inches(0.25), cy + Inches(0.13),
+                  col_w - Inches(0.4), Inches(0.25),
+                  badge, size=7, bold=True, color=accent)
+        _add_text(s, cx + Inches(0.25), cy + Inches(0.4),
+                  col_w - Inches(0.4), Inches(0.4),
+                  head, size=13, bold=True, color=NEAR_BLK)
+        _add_text(s, cx + Inches(0.25), cy + Inches(0.95),
+                  col_w - Inches(0.4), Inches(0.7),
+                  code, size=8, color=MID_GREY, font=FONT_MONO)
+        _add_text(s, cx + Inches(0.25), cy + Inches(1.7),
+                  col_w - Inches(0.4), Inches(0.9),
+                  body, size=10, color=DARK_GREY)
+
+    _add_text(s, tl_x + Inches(0.4), tl_y + tl_h - Inches(0.4),
+              tl_w - Inches(0.8), Inches(0.3),
+              "Same engine, same break-kinds, same precision — only the surface differs.",
+              size=10, italic=True, color=MID_GREY, align=PP_ALIGN.CENTER)
+
+    # ---- Right: mock terminal output --------------------------------------
+    rx = Inches(8.4); ry = Inches(2.95); rw = Inches(4.3); rh = Inches(4.1)
+    _add_rect(s, rx, ry, rw, rh, fill=NEAR_BLK)
+    _add_rect(s, rx, ry, rw, Inches(0.32), fill=RGBColor(0x33, 0x33, 0x33))
+    _add_text(s, rx + Inches(0.2), ry + Inches(0.05), rw - Inches(0.4), Inches(0.25),
+              "● ● ●   account-service ─ git push", size=8, color=RGBColor(0xAA, 0xAA, 0xAA),
+              font=FONT_MONO)
+
+    term_lines = [
+        ("$ git push -u origin demo/remove-balance",         RGBColor(0xCC, 0xCC, 0xCC)),
+        ("",                                                  WHITE),
+        ("sherlock: app=account-service  base=origin/main",   RGBColor(0xAA, 0xAA, 0xAA)),
+        ("",                                                  WHITE),
+        ("\U0001F50E Sherlock impact analysis",               WHITE),
+        ("(account-service · platform on-prem)",              RGBColor(0xAA, 0xAA, 0xAA)),
+        ("",                                                  WHITE),
+        ("⚠  1 breaking change(s)  ·  4 app(s) affected", RGBColor(0xFC, 0xA5, 0xA5)),
+        ("\U0001F6A8 3 cross-platform impact(s)",             RGBColor(0xFC, 0xA5, 0xA5)),
+        ("",                                                  WHITE),
+        ("  endpoint_removed  GET /accounts/{*}/balance",     RGBColor(0xFD, 0xE0, 0x68)),
+        ("    fraud-detection (risk-eng, T1, azure)",         RGBColor(0xCC, 0xCC, 0xCC)),
+        ("    mobile-bff      (mobile-exp, T1, azure)",       RGBColor(0xCC, 0xCC, 0xCC)),
+        ("    web-portal-bff  (web-exp, T1, azure)",          RGBColor(0xCC, 0xCC, 0xCC)),
+        ("    transaction-svc (payments, T1, on-prem)",       RGBColor(0xCC, 0xCC, 0xCC)),
+        ("",                                                  WHITE),
+        ("Sherlock informs — it does not block merges.",      RGBColor(0x88, 0x88, 0x88)),
+    ]
+    line_y = ry + Inches(0.4)
+    for line, color in term_lines:
+        _add_text(s, rx + Inches(0.2), line_y, rw - Inches(0.4), Inches(0.2),
+                  line, size=8, color=color, font=FONT_MONO)
+        line_y += Inches(0.205)
+
+    _notes(s, "Anchor: 'Same engine, three (soon four) entry points: terminal, IDE, MR. "
+              "We didn't bolt this on — once the engine existed, every developer-facing surface "
+              "is just a thin client over /analyze-diff.' "
+              "Two delivery modes worth calling out live: "
+              "(1) inform mode (default) — exit 0 after printing, push proceeds. "
+              "(2) hard-gate mode (SHERLOCK_BLOCK=true) — exit 1, push aborts on breaking changes. "
+              "Tier-0 systems can opt in to (2) without touching the engine. "
+              "VS Code extension is on the H1 finishing list — same /analyze-diff endpoint, "
+              "richer surface (status bar, problems panel, CodeLens).")
     return s
 
 
@@ -883,6 +1000,8 @@ def build_proof(prs, idx, total):
         ("Node/Express · ",     "web-portal-bff, mobile-bff"),
         ("COBOL · ",            "legacy-ledger (postings batch + ledger report)"),
         ("Hybrid platform · ",  "5 on-prem apps + 4 azure apps + 1 library, tagged via CMDB"),
+        ("API gateway · ",      "APIGEE-style YAML adapter — both BFFs use mixed direct + via-gateway calls"),
+        ("Shift-left · ",       "POST /analyze-diff + git pre-push hook — same engine, working-tree input"),
         ("Contracts · ",        "OpenAPI, AsyncAPI/Kafka, Flyway SQL, shared file feeds"),
         ("LLM · ",              "Gemini (local) + Azure OpenAI (enterprise), pluggable adapter"),
     ], size=12, line_spacing=1.4)
@@ -928,9 +1047,10 @@ def build_roadmap(prs, idx, total):
 
     horizons = [
         ("H1", "POC ✓ · pilot 0–3 mo",
-         "Cross-app visibility + MR impact bot + auto-discovery + hybrid platform",
+         "Cross-app visibility + MR impact bot + shift-left + hybrid + auto-discovery",
          "Canvas live. MR impact bot live. Sticky impact tags live. Hybrid Azure ↔ on-prem "
-         "callouts live. Reconciler auto-discovers new GitLab projects, installs webhooks, "
+         "callouts live. Shift-left endpoint + git pre-push hook live (VS Code extension is the "
+         "next slice). Reconciler auto-discovers new GitLab projects, installs webhooks, "
          "detects renames and archival. Pilot = production hardening + first domain rollout.",
          UBS_RED),
         ("H2", "POC started · pilot 3–6 mo",
@@ -1061,7 +1181,7 @@ def build_metrics(prs, idx, total):
     metrics = [
         ("MTTD for cross-app breaks",
          "Baseline",  "1–5 days",
-         "Target (pilot)", "< 1 hour (at MR time)", UBS_RED),
+         "Target (pilot)", "< 5s at push (hook)  ·  < 1h at MR (bot)", UBS_RED),
         ("MR impact-comment engagement",
          "Target", ">80% read by MR author",
          "Secondary", ">60% elicit a coordination action", BLACK),
@@ -1104,8 +1224,9 @@ def build_close(prs, idx, total):
     _add_text(s, Inches(0.6), Inches(2.3), Inches(12), Inches(1.5),
               "Every change has a blast radius.", size=40, bold=True, color=WHITE)
     _add_text(s, Inches(0.6), Inches(3.5), Inches(12), Inches(1.5),
-              "Sherlock makes it visible — at the moment a developer hits Merge.",
-              size=22, color=LINE_GREY)
+              "Sherlock makes it visible — from the developer's terminal at push, "
+              "through every MR, all the way into the downstream team's queue.",
+              size=20, color=LINE_GREY)
     _add_rect(s, Inches(0.6), Inches(5.0), Inches(1.6), Inches(0.06), fill=UBS_RED)
     _add_text(s, Inches(0.6), Inches(5.2), Inches(12), Inches(0.5),
               "Thank you. Questions?", size=18, italic=True, color=WHITE)
@@ -1173,7 +1294,7 @@ def build_a_coverage_detail(prs, idx, total):
         "Postgres schemas / tables — DDL (Flyway) + DML via SQL-in-code heuristics",
         "Shared file feeds on /shared/, /mnt/feeds/, /inbound/, /outbound/ — paired COBOL SELECT/ASSIGN",
         "Shared libraries via pom.xml / requirements.txt / pyproject / package.json",
-        "Hybrid platform tagging — CMDB-driven `platform` field merged into the graph; cross-boundary callouts at MR time",
+        "Hybrid platform tagging — CMDB-driven `platform` field merged into the graph; cross-boundary callouts at push, MR, and on the downstream sticky issue",
     ], size=11)
 
     _add_text(s, Inches(0.6), Inches(5.2), Inches(12), Inches(0.4),
@@ -1281,9 +1402,11 @@ def build_a_integrations(prs, idx, total):
         ("APM (Dynatrace). ",    "Cross-validate runtime traces against static edges. "
                                  "Flag unused edges (static-only) and surprise edges "
                                  "(runtime-only) — both are signals."),
-        ("API / AI gateway adapter. ", "Read gateway routing tables to unravel calls "
-                                       "that look generic at the source ('GET /v1/...') but "
-                                       "fan out to many backend services."),
+        ("API gateway adapter ✓. ", "APIGEE-style YAML adapter is delivered: caller hitting "
+                                     "`api.ubs.com/banking/v1/...` is unravelled to the real backend "
+                                     "app, with `via_gateway` stamped on the CALLS edge and rendered "
+                                     "dashed-red on the canvas. Mixed estate (some direct, some via "
+                                     "gateway) supported in the same scan."),
         ("Slack / Teams. ",      "Route impact notifications to on-call channels named in CMDB."),
         ("GitLab app / bot. ",   "Graduate from PAT to a proper GitLab app; per-group bot account; "
                                  "fine-grained scopes."),
@@ -1424,16 +1547,17 @@ def main():
         build_architecture,     # 6
         build_coverage,         # 7
         build_mr_moment,        # 8  — MR comment for BREAKING changes (for author)
-        build_canvas,           # 9
-        build_sticky_lifecycle, # 10 — impact::pending issues in DOWNSTREAM repos (for affected teams)
-        build_hybrid_platform,  # 11 — Azure / on-prem boundary callout — single graph, single workflow
-        build_autodoc,          # 12 — per-app README MR in THAT APP's own repo (for owning team)
-        build_proof,            # 13
-        build_roadmap,          # 14
-        build_pilot_plan,       # 15
-        build_ask,              # 16
-        build_metrics,          # 17
-        build_close,            # 18
+        build_shift_left,       # 9  — pre-push hook + /analyze-diff (developer-side, before the push)
+        build_canvas,           # 10
+        build_sticky_lifecycle, # 11 — impact::pending issues in DOWNSTREAM repos (for affected teams)
+        build_hybrid_platform,  # 12 — Azure / on-prem boundary callout — single graph, single workflow
+        build_autodoc,          # 13 — per-app README MR in THAT APP's own repo (for owning team)
+        build_proof,            # 14
+        build_roadmap,          # 15
+        build_pilot_plan,       # 16
+        build_ask,              # 17
+        build_metrics,          # 18
+        build_close,            # 19
     ]
     appx_builders = [
         build_appendix_divider,

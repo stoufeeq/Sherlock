@@ -115,8 +115,11 @@ services:
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
       AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
       AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-06-01}
+      SHERLOCK_GATEWAY_CONFIG: /etc/sherlock/gateway-routes.yaml
     ports:
       - "${SHERLOCK_PORT:-8001}:8000"
+    volumes:
+      - ./services/sherlock/config:/etc/sherlock:ro
     depends_on:
       - neo4j
       - cmdb-stub
