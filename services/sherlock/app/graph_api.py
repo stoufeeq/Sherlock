@@ -415,66 +415,108 @@ async def reconciler_trigger(request: Request) -> dict:
     return asdict(run)
 
 
+# Per-hop edge templates. Each query takes a list of source app names ($names)
+# and returns the set of apps reachable in ONE hop in the given direction. The
+# multi-hop walk in /impact does N rounds of these, expanding the visited set.
+_DOWNSTREAM_HOP_CYPHER = """
+UNWIND $names AS srcname
+MATCH (src:Application {name: srcname})
+CALL {
+  WITH src
+  MATCH (src)-[:EXPOSES]->(:Endpoint)<-[:CALLS]-(d:Application) RETURN d
+  UNION
+  WITH src
+  MATCH (d:Application)-[:CALLS]->(:Endpoint {host:src.name}) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:PUBLISHES]->(:Topic)<-[:CONSUMES]-(d:Application) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:WRITES_TABLE]->(:DBTable)<-[:READS_TABLE]-(d:Application) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:PUBLISHES_LIB]->(:Library)<-[:DEPENDS_ON_LIB]-(d:Application) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:WRITES_FILE]->(:FileFeed)<-[:READS_FILE]-(d:Application) RETURN d
+}
+WITH DISTINCT d
+WHERE NOT d.name IN $visited
+RETURN d.name AS name ORDER BY name
+"""
+
+_UPSTREAM_HOP_CYPHER = """
+UNWIND $names AS srcname
+MATCH (src:Application {name: srcname})
+CALL {
+  WITH src
+  MATCH (src)-[:CALLS]->(:Endpoint)<-[:EXPOSES]-(d:Application) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:CALLS]->(e:Endpoint) MATCH (d:Application {name:e.host}) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:CONSUMES]->(:Topic)<-[:PUBLISHES]-(d:Application) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:READS_TABLE]->(:DBTable)<-[:WRITES_TABLE]-(d:Application) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:DEPENDS_ON_LIB]->(:Library)<-[:PUBLISHES_LIB]-(d:Application) RETURN d
+  UNION
+  WITH src
+  MATCH (src)-[:READS_FILE]->(:FileFeed)<-[:WRITES_FILE]-(d:Application) RETURN d
+}
+WITH DISTINCT d
+WHERE NOT d.name IN $visited
+RETURN d.name AS name ORDER BY name
+"""
+
+# Hard ceiling on how deep the BFS will walk — a runaway query in a 50k-node
+# graph could iterate forever otherwise. 10 is well past anything anyone wants
+# in a UI; the MR-bot only ever uses depth 1.
+_MAX_DEPTH = 10
+
+
 @router.get("/impact/{app_name}")
 def impact(app_name: str, request: Request, direction: str = "downstream", depth: int = 1) -> dict:
-    """Return apps affected downstream (1 hop) by changes in `app_name`, or upstream deps.
+    """Return apps affected by changes in `app_name`, walked up to `depth` hops.
 
-    Depth is currently single-hop; will expand to multi-hop in a later loop.
+    `depth=1` (default) is the original single-hop behaviour the MR bot uses.
+    Higher depths surface 2nd-, 3rd-order blast radius for the canvas overlay
+    and for "but what about the apps that depend on the apps I depend on?"
+    questions. The response includes a `by_hop` breakdown so the caller can
+    distinguish immediate from indirect impact.
     """
     if direction not in {"downstream", "upstream"}:
         raise HTTPException(status_code=400, detail="direction must be downstream|upstream")
+    if depth < 1 or depth > _MAX_DEPTH:
+        raise HTTPException(status_code=400, detail=f"depth must be 1..{_MAX_DEPTH}")
     driver = request.app.state.graph.driver
+    cypher = _DOWNSTREAM_HOP_CYPHER if direction == "downstream" else _UPSTREAM_HOP_CYPHER
 
-    if direction == "downstream":
-        query = """
-        MATCH (src:Application {name:$app})
-        CALL {
-          WITH src
-          MATCH (src)-[:EXPOSES]->(:Endpoint)<-[:CALLS]-(d:Application) RETURN d
-          UNION
-          WITH src
-          MATCH (d:Application)-[:CALLS]->(:Endpoint {host:src.name}) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:PUBLISHES]->(:Topic)<-[:CONSUMES]-(d:Application) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:WRITES_TABLE]->(:DBTable)<-[:READS_TABLE]-(d:Application) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:PUBLISHES_LIB]->(:Library)<-[:DEPENDS_ON_LIB]-(d:Application) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:WRITES_FILE]->(:FileFeed)<-[:READS_FILE]-(d:Application) RETURN d
-        }
-        WITH DISTINCT d WHERE d.name <> $app
-        RETURN d.name AS name ORDER BY name
-        """
-    else:
-        query = """
-        MATCH (src:Application {name:$app})
-        CALL {
-          WITH src
-          MATCH (src)-[:CALLS]->(e:Endpoint)<-[:EXPOSES]-(d:Application) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:CALLS]->(e:Endpoint) MATCH (d:Application {name:e.host}) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:CONSUMES]->(:Topic)<-[:PUBLISHES]-(d:Application) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:READS_TABLE]->(:DBTable)<-[:WRITES_TABLE]-(d:Application) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:DEPENDS_ON_LIB]->(:Library)<-[:PUBLISHES_LIB]-(d:Application) RETURN d
-          UNION
-          WITH src
-          MATCH (src)-[:READS_FILE]->(:FileFeed)<-[:WRITES_FILE]-(d:Application) RETURN d
-        }
-        WITH DISTINCT d WHERE d.name <> $app
-        RETURN d.name AS name ORDER BY name
-        """
+    visited: set[str] = {app_name}
+    frontier: list[str] = [app_name]
+    by_hop: list[dict] = []
     with driver.session() as s:
-        apps_affected = [row["name"] for row in s.run(query, app=app_name)]
-    return {"app": app_name, "direction": direction, "depth": depth, "affected_apps": apps_affected}
+        for hop in range(1, depth + 1):
+            if not frontier:
+                break
+            new_apps = [
+                row["name"] for row in s.run(cypher, names=frontier, visited=list(visited))
+            ]
+            by_hop.append({"hop": hop, "apps": new_apps})
+            if not new_apps:
+                break
+            visited.update(new_apps)
+            frontier = new_apps
+
+    affected = sorted(visited - {app_name})
+    return {
+        "app": app_name,
+        "direction": direction,
+        "depth": depth,
+        "max_hop_reached": by_hop[-1]["hop"] if by_hop else 0,
+        "affected_apps": affected,
+        "by_hop": by_hop,
+    }

@@ -1,0 +1,16 @@
+[Unit]
+Description=Sherlock CMDB stub (POC only — replace with real CMDB adapter for pilot)
+Documentation=https://github.com/stoufeeq/Sherlock
+After=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=/opt/sherlock/services/sherlock-cmdb-stub
+ExecStart=/opt/sherlock/cmdb-venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8500
+Restart=on-failure
+RestartSec=5
+User=sherlock
+Group=sherlock
+
+[Install]
+WantedBy=multi-user.target

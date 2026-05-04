@@ -1,0 +1,66 @@
+{
+  "name": "sherlock-impact",
+  "displayName": "Sherlock Impact",
+  "description": "Shows downstream cross-application impact for the working-tree changes — same engine as the Sherlock MR bot, surfaced before you even commit.",
+  "version": "0.1.0",
+  "publisher": "ubs-platform",
+  "engines": { "vscode": "^1.74.0" },
+  "categories": ["Other", "SCM Providers"],
+  "keywords": ["dependency", "impact", "sherlock", "cross-app", "ubs"],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "sherlock.analyzeImpact",
+        "title": "Sherlock: Analyze Impact of Pending Changes",
+        "category": "Sherlock"
+      },
+      {
+        "command": "sherlock.openLastReport",
+        "title": "Sherlock: Open Last Impact Report",
+        "category": "Sherlock"
+      }
+    ],
+    "configuration": {
+      "title": "Sherlock",
+      "properties": {
+        "sherlock.endpoint": {
+          "type": "string",
+          "default": "http://localhost:8001",
+          "description": "Base URL of the Sherlock service (no trailing slash)."
+        },
+        "sherlock.baseRef": {
+          "type": "string",
+          "default": "origin/main",
+          "description": "Git ref to diff against. Sherlock's analyze-diff endpoint will clone this ref and overlay your working-tree changes."
+        },
+        "sherlock.appName": {
+          "type": "string",
+          "default": "",
+          "description": "Override the application name. Defaults to the basename of the workspace folder if blank."
+        },
+        "sherlock.token": {
+          "type": "string",
+          "default": "",
+          "description": "Optional auth token (sent as Authorization: Bearer ...). Leave blank for local dev."
+        },
+        "sherlock.analyzeOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-run impact analysis 1 second after each save (debounced). Off by default — large workspaces should keep it manual."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "vsce package --no-dependencies"
+  },
+  "license": "Internal — UBS",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stoufeeq/Sherlock"
+  }
+}

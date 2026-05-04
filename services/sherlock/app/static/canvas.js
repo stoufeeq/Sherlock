@@ -50,10 +50,17 @@ const NODE_STYLE_BASE = [
   { selector: 'node[label="DBTable"]',     style: { "shape": "hexagon" } },
   { selector: 'node[label="FileFeed"]',    style: { "shape": "cut-rectangle" } },
 
-  // highlight / dim / impact states (shared)
+  // highlight / dim / impact states (shared).
+  // Per-hop banding: hop-1 (immediate) is most saturated, hop-5 (distant) is muted.
+  // The same colours appear in the side-panel legend so the canvas reads at a glance.
   { selector: ".dim",     style: { "opacity": 0.25 } },
   { selector: ".highlight", style: { "border-width": 3, "border-color": "#EC0016" } },
   { selector: ".impact",  style: { "background-color": "#F97316", "border-width": 2, "border-color": "#EA580C" } },
+  { selector: ".impact-hop-1", style: { "background-color": "#EC0016", "border-color": "#B00010" } },
+  { selector: ".impact-hop-2", style: { "background-color": "#F97316", "border-color": "#EA580C" } },
+  { selector: ".impact-hop-3", style: { "background-color": "#F59E0B", "border-color": "#B45309" } },
+  { selector: ".impact-hop-4", style: { "background-color": "#EAB308", "border-color": "#854D0E" } },
+  { selector: ".impact-hop-5", style: { "background-color": "#94A3B8", "border-color": "#475569" } },
   { selector: ".impact-edge", style: { "line-color": "#F97316", "target-arrow-color": "#F97316", "width": 2.5 } },
 
   // Platform-coloured ring on Application nodes — visible cross-boundary marker
@@ -75,6 +82,11 @@ const NODE_STYLE_BASE = [
     },
   },
 ];
+
+// Per-hop palette — kept in sync with the .impact-hop-N selectors above and
+// the hop swatches in the impact-legend element.
+const HOP_COLOURS = ["#EC0016", "#F97316", "#F59E0B", "#EAB308", "#94A3B8"];
+const HOP_CLASSES = "impact impact-hop-1 impact-hop-2 impact-hop-3 impact-hop-4 impact-hop-5 impact-edge highlight dim";
 
 const EDGE_STYLE_CONTRACT = [
   {
@@ -195,6 +207,13 @@ async function init() {
   document.getElementById("impact-downstream").addEventListener("click", () => showImpact("downstream"));
   document.getElementById("impact-upstream").addEventListener("click", () => showImpact("upstream"));
   document.getElementById("clear-impact").addEventListener("click", clearImpact);
+
+  // Live label on the depth slider so users see "Hops 3" not just an unmarked thumb.
+  const depthSlider = document.getElementById("impact-depth");
+  const depthValue  = document.getElementById("impact-depth-value");
+  if (depthSlider && depthValue) {
+    depthSlider.addEventListener("input", () => { depthValue.textContent = depthSlider.value; });
+  }
   document.getElementById("generate-docs").addEventListener("click", generateDocs);
 
   const archivedToggle = document.getElementById("toggle-archived");
@@ -426,7 +445,7 @@ function render() {
 }
 
 function selectNode(node) {
-  cy.elements().removeClass("highlight dim impact impact-edge");
+  cy.elements().removeClass(HOP_CLASSES);
   node.addClass("highlight");
   const neighborhood = node.closedNeighborhood();
   cy.elements().difference(neighborhood).addClass("dim");
@@ -451,7 +470,7 @@ function selectNode(node) {
 }
 
 function deselect() {
-  cy.elements().removeClass("highlight dim impact impact-edge");
+  cy.elements().removeClass(HOP_CLASSES);
   selectedAppName = null;
   document.getElementById("selected-panel").classList.add("hidden");
   document.querySelectorAll("#app-list li").forEach((li) => li.classList.remove("active"));
@@ -470,14 +489,28 @@ function formatNode(d) {
 
 async function showImpact(direction) {
   if (!selectedAppName) return;
-  const data = await fetch(`/api/impact/${encodeURIComponent(selectedAppName)}?direction=${direction}`).then((r) => r.json());
-  cy.elements().removeClass("impact impact-edge highlight dim");
+  const depth = Number(document.getElementById("impact-depth")?.value || 1);
+  const data = await fetch(
+    `/api/impact/${encodeURIComponent(selectedAppName)}?direction=${direction}&depth=${depth}`
+  ).then((r) => r.json());
 
-  const affected = new Set(data.affected_apps);
+  cy.elements().removeClass(HOP_CLASSES);
+
+  // App name → hop number (0 for the source itself).
+  const hopOf = new Map();
+  hopOf.set(selectedAppName, 0);
+  for (const { hop, apps } of data.by_hop || []) {
+    for (const a of apps) {
+      if (!hopOf.has(a)) hopOf.set(a, hop);
+    }
+  }
+
   cy.nodes().forEach((n) => {
     const d = n.data();
-    if (d.label === "Application" && (affected.has(d.name) || d.name === selectedAppName)) {
-      n.addClass("impact");
+    if (d.label === "Application" && hopOf.has(d.name)) {
+      const hop = hopOf.get(d.name);
+      // Hop 0 (source) gets the strong red highlight; hops 1..5 get the banded class.
+      n.addClass(hop === 0 ? "highlight" : `impact-hop-${Math.min(hop, 5)}`);
     } else {
       n.addClass("dim");
     }
@@ -485,13 +518,50 @@ async function showImpact(direction) {
   cy.edges().forEach((e) => {
     const s = cy.getElementById(e.data("source"));
     const t = cy.getElementById(e.data("target"));
-    if (s.hasClass("impact") && t.hasClass("impact")) e.addClass("impact-edge");
+    const lit = (n) => n.hasClass("highlight") ||
+                       n.hasClass("impact-hop-1") || n.hasClass("impact-hop-2") ||
+                       n.hasClass("impact-hop-3") || n.hasClass("impact-hop-4") ||
+                       n.hasClass("impact-hop-5");
+    if (lit(s) && lit(t)) e.addClass("impact-edge");
     else e.addClass("dim");
   });
+
+  renderImpactLegend(data, direction);
+}
+
+function renderImpactLegend(data, direction) {
+  const el = document.getElementById("impact-legend");
+  if (!el) return;
+  const hops = data.by_hop || [];
+  if (hops.length === 0) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+  const arrow = direction === "downstream" ? "→" : "←";
+  const total = hops.reduce((acc, h) => acc + h.apps.length, 0);
+  let html = `<h4>${arrow} ${total} APP${total === 1 ? "" : "S"} REACHED  ·  DEPTH ${data.max_hop_reached}</h4>`;
+  for (const { hop, apps } of hops) {
+    if (apps.length === 0) continue;
+    const colour = HOP_COLOURS[Math.min(hop, HOP_COLOURS.length) - 1];
+    const list = apps.join(", ");
+    html += `<div class="hop">`
+          + `<span class="swatch" style="background:${colour}"></span>`
+          + `<span class="label">Hop ${hop}</span>`
+          + `<span class="apps">${list}</span>`
+          + `</div>`;
+  }
+  el.innerHTML = html;
+  el.classList.remove("hidden");
 }
 
 function clearImpact() {
-  cy.elements().removeClass("impact impact-edge dim highlight");
+  cy.elements().removeClass(HOP_CLASSES);
+  const legend = document.getElementById("impact-legend");
+  if (legend) {
+    legend.classList.add("hidden");
+    legend.innerHTML = "";
+  }
 }
 
 async function generateDocs() {

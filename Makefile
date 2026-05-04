@@ -1,6 +1,6 @@
 .PHONY: up down clean logs logs-gitlab logs-sherlock status bootstrap gitlab-root-password \
         webhooks scan-all scan neo4j sherlock-build sherlock-logs demo-break \
-        impact-check install-pre-push help
+        impact-check install-pre-push extension-package help
 
 help:
 	@echo "Sherlock local dev targets"
@@ -29,6 +29,7 @@ help:
 	@echo " Shift-left (pre-commit / pre-push impact analysis)"
 	@echo "  make impact-check repo=<path>            — run shift-left impact check on a working tree"
 	@echo "  make install-pre-push repo=<path>        — install hook into <path>/.git/hooks/pre-push"
+	@echo "  make extension-package                   — build the VS Code / Cursor / Antigravity .vsix"
 
 up:
 	docker compose up -d
@@ -88,6 +89,13 @@ install-pre-push:
 	@test -d "$(repo)/.git/hooks" || (echo "$(repo)/.git/hooks not found" && exit 1)
 	@ln -sf $(CURDIR)/scripts/sherlock-impact-check.sh $(repo)/.git/hooks/pre-push
 	@echo "installed: $(repo)/.git/hooks/pre-push -> scripts/sherlock-impact-check.sh"
+
+extension-package:
+	@command -v npx >/dev/null 2>&1 || (echo "npx not found — install Node.js (https://nodejs.org)" && exit 1)
+	@cd tools/vscode-sherlock && npx --yes @vscode/vsce package --no-dependencies
+	@echo ""
+	@echo "Install with:  code --install-extension tools/vscode-sherlock/sherlock-impact-*.vsix"
+	@echo "Same .vsix works in Cursor, Windsurf, and Antigravity (drag-drop into Extensions side bar)."
 
 neo4j:
 	@echo "Neo4j Browser:  http://localhost:$${NEO4J_HTTP_PORT:-7474}"

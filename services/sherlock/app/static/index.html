@@ -34,6 +34,12 @@
           <button id="impact-upstream">← Upstream</button>
           <button id="clear-impact" class="secondary">Reset</button>
         </div>
+        <div class="impact-depth-row">
+          <label for="impact-depth">Hops</label>
+          <input id="impact-depth" type="range" min="1" max="5" value="1" />
+          <span id="impact-depth-value">1</span>
+        </div>
+        <div id="impact-legend" class="impact-legend hidden"></div>
         <div class="button-row">
           <button id="generate-docs" class="secondary">📄 Generate docs (Sherlock autodoc)</button>
         </div>

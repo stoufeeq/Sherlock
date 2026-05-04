@@ -1,0 +1,19 @@
+[Unit]
+Description=Sherlock Dependency Intelligence Platform
+Documentation=https://github.com/stoufeeq/Sherlock
+After=network-online.target neo4j.service cmdb-stub.service
+Wants=neo4j.service cmdb-stub.service
+
+[Service]
+Type=exec
+WorkingDirectory=/opt/sherlock/services/sherlock
+EnvironmentFile=/etc/sherlock/sherlock.env
+# Listens on :8001 directly — no Docker host:container port mapping in play here.
+ExecStart=/opt/sherlock/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
+Restart=on-failure
+RestartSec=5
+User=sherlock
+Group=sherlock
+
+[Install]
+WantedBy=multi-user.target

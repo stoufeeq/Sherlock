@@ -196,6 +196,35 @@ button.secondary {
 button.secondary:hover { background: #F5F5F5; }
 button:disabled { background: #E5E5E5; color: #999; cursor: not-allowed; }
 
+/* Impact-depth slider lives just under the Downstream/Upstream buttons. */
+.impact-depth-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px; font-size: 11px; color: #555;
+}
+.impact-depth-row input[type="range"] { flex: 1; min-width: 80px; accent-color: #EC0016; }
+#impact-depth-value { font-weight: 600; color: #1A1A1A; min-width: 1.1em; text-align: right; }
+
+/* Per-hop legend rendered after Sherlock returns the by_hop breakdown.
+   Hop bands progress from UBS-red (1st hop, immediate) through orange and amber
+   to slate (5th hop, distant) — the same gradient the canvas highlights use. */
+.impact-legend {
+  margin-top: 8px; padding: 8px 10px; border: 1px solid #E5E7EB; border-radius: 4px;
+  background: #FAFAFA; font-size: 11px;
+}
+.impact-legend.hidden { display: none; }
+.impact-legend h4 {
+  margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #6B7280; letter-spacing: 0.5px;
+}
+.impact-legend .hop {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 2px 0; line-height: 1.4;
+}
+.impact-legend .hop .swatch {
+  flex: 0 0 10px; width: 10px; height: 10px; border-radius: 2px; align-self: center;
+}
+.impact-legend .hop .label { font-weight: 600; color: #111; min-width: 3.5em; }
+.impact-legend .hop .apps  { color: #444; }
+
 /* Autodoc status pill (inline under the Generate Docs button) */
 .autodoc-status {
   margin-top: 8px; font-size: 11px; padding: 6px 8px;

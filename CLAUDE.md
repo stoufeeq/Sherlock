@@ -27,7 +27,9 @@ Six work loops are complete and end-to-end demoable:
 | **6** | LLM-backed auto-documentation — pluggable provider (`mock` / `gemini` / `azure_openai`), per-app draft MR with a marker-delimited Sherlock section in `README.md`. UI button. |
 | **— hybrid platform** | CMDB-driven `platform` field (azure / on-prem / library) merged into the graph. Cross-platform impacts surface a 🚨 banner in the MR comment, an `impact::cross-platform` label on sticky issues, and coloured rings (Azure blue / slate) on the canvas. |
 | **— api gateway** | APIGEE-style gateway resolver: caller hits `https://api.ubs.com/banking/v1/...`, Sherlock loads `services/sherlock/config/gateway-routes.yaml`, rewrites to the real backend app + path, and stamps `via_gateway` on the CALLS edge so the canvas dashes it red. Mixed estate supported (some apps direct, some via gateway). Both BFFs in the fixture demonstrate the mix. |
-| **— shift-left** | `POST /analyze-diff` runs the same engine as the MR bot but takes an in-flight `working_files` map + `deleted_files` list — no MR, no GitLab side-effects. Powers `scripts/sherlock-impact-check.sh`, which clones the diff vs `origin/main`, posts to the endpoint, and prints a coloured summary of breaks + cross-platform impacts. Install as a git pre-push hook with `make install-pre-push repo=<path>`. Foundation for the future VS Code extension. |
+| **— shift-left** | `POST /analyze-diff` runs the same engine as the MR bot but takes an in-flight `working_files` map + `deleted_files` list — no MR, no GitLab side-effects. Powers `scripts/sherlock-impact-check.sh`, which clones the diff vs `origin/main`, posts to the endpoint, and prints a coloured summary of breaks + cross-platform impacts. Install as a git pre-push hook with `make install-pre-push repo=<path>`. |
+| **— vscode extension** | `tools/vscode-sherlock/` — single-file JS extension (no build step). Status-bar count + `Sherlock: Analyze Impact of Pending Changes` command + webview report. Same `/analyze-diff` payload as the pre-push hook. Builds to a `.vsix` via `make extension-package` and installs in **VS Code / Cursor / Windsurf / Antigravity** (all VS Code forks, same extension API). |
+| **— multi-hop impact** | `/api/impact/{app}?depth=N` walks the cross-app coupling graph N hops via Python BFS over per-hop Cypher templates (cap 10). Response carries a `by_hop` breakdown so the canvas colours each hop a different shade (UBS-red → orange → amber → yellow → slate). Hop slider + per-hop legend on the side panel; surfaces 2nd/3rd-order blast radius for "what about the apps that depend on the apps I depend on?" |
 
 A CTO pitch deck is generated from `tools/deck/generate.py` into
 [Sherlock_CTO_Pitch.pptx](Sherlock_CTO_Pitch.pptx) (28 slides, UBS-themed).
@@ -106,10 +108,26 @@ Sherlock/
 │   ├── demo-breaking-change.sh    # opens a breaking MR on account-service
 │   └── demo-break-file.sh         # opens a breaking MR on transaction-service (file-feed break)
 │
-└── tools/deck/
-    ├── generate.py             # python-pptx deck builder (UBS theme)
-    ├── requirements.txt
-    └── README.md               # slide map + presenter checklist
+├── tools/deck/
+│   ├── generate.py             # python-pptx deck builder (UBS theme)
+│   ├── requirements.txt
+│   └── README.md               # slide map + presenter checklist
+│
+├── tools/vscode-sherlock/      # VS Code / Cursor / Windsurf / Antigravity extension (MVP)
+│   ├── package.json            # extension manifest (commands, settings, activation events)
+│   ├── extension.js            # single-file JS extension — status bar, command, webview
+│   ├── README.md               # install + dev instructions
+│   └── .vscodeignore
+│
+└── deploy/native-rhel/         # Native (Docker-free) RHEL VM install bundle
+    ├── README.md               # step-by-step runbook
+    ├── install-gitlab.sh       # GitLab CE Omnibus install + first reconfigure
+    ├── install-sherlock.sh     # Neo4j + Sherlock + CMDB stub + systemd + firewall
+    ├── bootstrap.sh            # push fixture repos to local GitLab + first scan
+    ├── sherlock.env.example    # template for /etc/sherlock/sherlock.env
+    └── systemd/
+        ├── sherlock.service    # Type=exec, EnvironmentFile=/etc/sherlock/sherlock.env
+        └── cmdb-stub.service
 ```
 
 ---
@@ -145,6 +163,22 @@ Regenerate the pitch deck:
 ```bash
 cd tools/deck && .venv/bin/python generate.py
 ```
+
+Native (Docker-free) install on a RHEL VM — for environments where Docker isn't
+permitted and the corporate GitLab is RBAC-gated. Stands up local GitLab CE +
+Neo4j + Sherlock + CMDB stub via systemd:
+
+```bash
+# from a clean RHEL 8/9 VM, after `git clone` to /opt/sherlock
+cd /opt/sherlock/deploy/native-rhel
+sudo VM_HOST=<vm-fqdn> ./install-gitlab.sh        # GitLab CE Omnibus
+# create a PAT in the GitLab UI, then:
+sudo PAT_TOKEN=<pat> VM_HOST=<vm-fqdn> ./install-sherlock.sh
+sudo PAT_TOKEN=<pat> VM_HOST=<vm-fqdn> ./bootstrap.sh
+```
+
+Full runbook + verification + airgapped-VM notes in
+[deploy/native-rhel/README.md](deploy/native-rhel/README.md).
 
 ---
 
@@ -189,7 +223,7 @@ Read endpoints (no auth in dev):
 - `GET /api/graph?include_archived=` — full Cytoscape JSON (apps + endpoints + topics + tables + files + libs)
 - `GET /api/app-graph?include_archived=` — collapsed app-to-app edges only
 - `GET /api/apps?include_archived=` — list apps with CMDB metadata + counts + archival flags
-- `GET /api/impact/{app}?direction=downstream|upstream` — one-hop reachable apps
+- `GET /api/impact/{app}?direction=downstream|upstream&depth=N` — multi-hop reachable apps; response includes `affected_apps` (flat) + `by_hop` (per-hop breakdown). Depth defaults to 1 (legacy MR-bot behaviour); cap is 10.
 - `GET /api/reconciler/status` — last 20 reconciliation runs
 
 Write endpoints:
@@ -250,8 +284,7 @@ Autodoc does **not** propagate to downstream repos. That's the sticky-tag flow. 
 - **gRPC / GraphQL contract detection** — only OpenAPI + AsyncAPI today.
 - **GitLab Group-level webhooks** — reconciler is the substitute (≤60s discovery latency).
 - **CI component** that teams `include:` from `.gitlab-ci.yml` — webhooks-only today.
-- **Multi-hop impact traversal** — `/api/impact/{app}` is single-hop.
-- **VS Code extension** for shift-left — only the `/analyze-diff` API + git pre-push hook exist today. Extension is the next slice.
+- **VS Code extension polish (Phase B)** — current MVP ships status-bar + command + webview. Roadmap: Problems-panel diagnostics, CodeLens on endpoint definitions, GitLab OIDC instead of PAT.
 - **`impact::acknowledged` flow** for downstream teams to dismiss without closing.
 - **Scheduled remote agents** for periodic doc regeneration of stale repos.
 
