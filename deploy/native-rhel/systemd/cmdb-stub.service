@@ -5,8 +5,8 @@ After=network-online.target
 
 [Service]
 Type=exec
-WorkingDirectory=/opt/sherlock/services/sherlock-cmdb-stub
-ExecStart=/opt/sherlock/cmdb-venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8500
+WorkingDirectory=@SHERLOCK_HOME@/services/sherlock-cmdb-stub
+ExecStart=@SHERLOCK_HOME@/cmdb-venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8500
 Restart=on-failure
 RestartSec=5
 User=sherlock

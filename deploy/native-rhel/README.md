@@ -32,8 +32,12 @@ well under 2 GB.
 ## Install — three scripts, one .env
 
 ```bash
-# 1. Clone the repo on the VM
+# 1. Place the source on the VM. Either:
+#    a. git clone (requires github.com access from the VM):
 sudo git clone https://github.com/stoufeeq/Sherlock.git /opt/sherlock
+#    b. unzip a release archive copied via SCP:
+sudo unzip Sherlock-main.zip -d /opt && sudo mv /opt/Sherlock-main /opt/sherlock
+
 cd /opt/sherlock/deploy/native-rhel
 
 # 2. Install GitLab Omnibus (~5 min on first reconfigure)
@@ -47,6 +51,22 @@ sudo PAT_TOKEN=<paste-the-PAT> VM_HOST=<your-vm-fqdn-or-ip> ./install-sherlock.s
 # 4. Push fixture repos into local GitLab + register webhooks + first scan
 sudo PAT_TOKEN=<paste-the-PAT> VM_HOST=<your-vm-fqdn-or-ip> ./bootstrap.sh
 ```
+
+**Custom install root.** All three scripts honour `SHERLOCK_HOME` if set —
+e.g. if `/opt` is unwritable on your VM, use `/app/C10/Sherlock` instead:
+
+```bash
+sudo unzip Sherlock-main.zip -d /app/C10 && sudo mv /app/C10/Sherlock-main /app/C10/Sherlock
+cd /app/C10/Sherlock/deploy/native-rhel
+sudo SHERLOCK_HOME=/app/C10/Sherlock VM_HOST=<vm> ./install-gitlab.sh
+sudo SHERLOCK_HOME=/app/C10/Sherlock PAT_TOKEN=<pat> VM_HOST=<vm> ./install-sherlock.sh
+sudo SHERLOCK_HOME=/app/C10/Sherlock PAT_TOKEN=<pat> VM_HOST=<vm> ./bootstrap.sh
+```
+
+The systemd units are templated — `install-sherlock.sh` renders them with the
+right `WorkingDirectory` and `ExecStart` paths automatically.
+
+Already running as `root`? Drop the `sudo` — it's a no-op when uid=0.
 
 After `bootstrap.sh` returns, open `http://<your-vm>:8001/ui/` — the canvas
 shows the 10 fixture banking apps with their cross-app dependencies.

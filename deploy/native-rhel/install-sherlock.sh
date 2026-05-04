@@ -99,9 +99,14 @@ chmod 0640 /etc/sherlock/sherlock.env
 chown -R sherlock:sherlock /etc/sherlock "$SHERLOCK_HOME"
 
 # 5. systemd units ------------------------------------------------------------
-echo "==> Installing systemd units"
-install -m 0644 "$DEPLOY_DIR/systemd/sherlock.service"  /etc/systemd/system/sherlock.service
-install -m 0644 "$DEPLOY_DIR/systemd/cmdb-stub.service" /etc/systemd/system/cmdb-stub.service
+# Templates use @SHERLOCK_HOME@ so a non-default install root (e.g. /app/C10/Sherlock)
+# is honoured in WorkingDirectory + ExecStart, not just in pip install paths.
+echo "==> Installing systemd units (rendered with SHERLOCK_HOME=$SHERLOCK_HOME)"
+sed "s|@SHERLOCK_HOME@|$SHERLOCK_HOME|g" \
+    "$DEPLOY_DIR/systemd/sherlock.service"  > /etc/systemd/system/sherlock.service
+sed "s|@SHERLOCK_HOME@|$SHERLOCK_HOME|g" \
+    "$DEPLOY_DIR/systemd/cmdb-stub.service" > /etc/systemd/system/cmdb-stub.service
+chmod 0644 /etc/systemd/system/sherlock.service /etc/systemd/system/cmdb-stub.service
 systemctl daemon-reload
 
 # 6. Firewall -----------------------------------------------------------------
