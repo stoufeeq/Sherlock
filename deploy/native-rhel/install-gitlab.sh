@@ -4,6 +4,12 @@
 # Usage:
 #   sudo VM_HOST=<vm-fqdn-or-ip> ./install-gitlab.sh
 #
+# Optional env knobs:
+#   GITLAB_PORT        default 8080
+#   OFFLINE_RPM_DIR    directory containing a pre-downloaded gitlab-ce RPM
+#                      (e.g. /root/sherlock-rpms — used when packages.gitlab.com
+#                      isn't reachable from the VM)
+#
 # After this finishes:
 #   1. Visit http://$VM_HOST:8080
 #   2. Log in as `root` with the printed initial password
@@ -18,11 +24,15 @@ set -euo pipefail
 GITLAB_PORT="${GITLAB_PORT:-8080}"
 EXTERNAL_URL="http://${VM_HOST}:${GITLAB_PORT}"
 
-echo "==> Adding GitLab CE rpm repo"
-curl -fsSL https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.rpm.sh | bash
-
-echo "==> Installing gitlab-ce (this is the slow step — first reconfigure takes ~5 min)"
-EXTERNAL_URL="$EXTERNAL_URL" dnf -y install gitlab-ce
+if [[ -n "${OFFLINE_RPM_DIR:-}" ]] && ls "$OFFLINE_RPM_DIR"/gitlab-ce-*.rpm >/dev/null 2>&1; then
+  echo "==> Installing gitlab-ce from offline RPM at $OFFLINE_RPM_DIR (~5 min for first reconfigure)"
+  EXTERNAL_URL="$EXTERNAL_URL" dnf -y install "$OFFLINE_RPM_DIR"/gitlab-ce-*.rpm
+else
+  echo "==> Adding GitLab CE rpm repo from packages.gitlab.com"
+  curl -fsSL https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.rpm.sh | bash
+  echo "==> Installing gitlab-ce (~5 min for first reconfigure)"
+  EXTERNAL_URL="$EXTERNAL_URL" dnf -y install gitlab-ce
+fi
 
 # Match the laptop demo's compose tweak: move Puma off :8080 so it doesn't
 # collide with nginx. Without this, GitLab crash-loops on EADDRINUSE.

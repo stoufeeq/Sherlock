@@ -146,17 +146,77 @@ afterwards and `gitlab-ctl reconfigure`.
 
 ---
 
-## Disconnected / airgapped VMs
+## Restricted-network VMs (the common UBS shape)
 
-If the VM has no internet access, do these steps on a workstation that does:
+When the VM has internal RPM repos but no direct route to `packages.gitlab.com`,
+`yum.neo4j.com`, or `pypi.org`, the scripts honour two environment variables
+that swap external sources for offline / mirrored ones.
 
-1. Run `dnf download --resolve --destdir=./rpms gitlab-ce neo4j` to mirror the
-   needed RPMs.
-2. `pip download -r services/sherlock/requirements.txt -d ./wheels` to mirror
-   the Python wheels.
-3. SCP both directories + the repo to the VM, then in the install scripts swap
-   `dnf install gitlab-ce` for `dnf install ./rpms/gitlab-ce-*.rpm` and
-   `pip install -r requirements.txt` for `pip install --no-index --find-links=./wheels -r requirements.txt`.
+### `PIP_INDEX_URL` — internal PyPI mirror
+
+If your platform team has an Artifactory PyPI proxy (most do), pass its URL
+and Python deps install from there instead of `pypi.org`:
+
+```bash
+PIP_INDEX_URL=https://artifactory.ubs.internal/api/pypi/pypi/simple/ \
+PIP_TRUSTED_HOST=artifactory.ubs.internal \
+PAT_TOKEN=<pat> VM_HOST=<vm> \
+  ./install-sherlock.sh
+```
+
+### `OFFLINE_RPM_DIR` — pre-downloaded gitlab-ce / neo4j RPMs
+
+When `packages.gitlab.com` and `yum.neo4j.com` are unreachable, download the
+two RPMs on a workstation that has internet, SCP them to the VM, then point
+the scripts at the directory:
+
+```bash
+# On a workstation with internet:
+mkdir sherlock-rpms && cd sherlock-rpms
+curl -L -O https://packages.gitlab.com/gitlab/gitlab-ce/packages/el/8/gitlab-ce-17.5.2-ce.0.el8.x86_64.rpm/download.rpm
+mv download.rpm gitlab-ce-17.5.2-ce.0.el8.x86_64.rpm
+curl -L -O https://dist.neo4j.org/rpm/community/neo4j-5.24.0-1.noarch.rpm
+curl -L -O https://dist.neo4j.org/cypher-shell/cypher-shell-5.24.0-1.noarch.rpm
+scp *.rpm root@<vm>:/root/sherlock-rpms/
+
+# On the VM:
+OFFLINE_RPM_DIR=/root/sherlock-rpms VM_HOST=<vm> ./install-gitlab.sh
+OFFLINE_RPM_DIR=/root/sherlock-rpms PAT_TOKEN=<pat> VM_HOST=<vm> ./install-sherlock.sh
+```
+
+### Combined — typical UBS-shape POC
+
+```bash
+OFFLINE_RPM_DIR=/root/sherlock-rpms \
+PIP_INDEX_URL=https://artifactory.ubs.internal/api/pypi/pypi/simple/ \
+PIP_TRUSTED_HOST=artifactory.ubs.internal \
+SHERLOCK_HOME=/app/C10/Sherlock \
+VM_HOST=<vm-fqdn> \
+  ./install-gitlab.sh
+
+# create PAT in GitLab UI, then re-export everything plus PAT_TOKEN
+
+OFFLINE_RPM_DIR=/root/sherlock-rpms \
+PIP_INDEX_URL=https://artifactory.ubs.internal/api/pypi/pypi/simple/ \
+PIP_TRUSTED_HOST=artifactory.ubs.internal \
+SHERLOCK_HOME=/app/C10/Sherlock \
+VM_HOST=<vm-fqdn> PAT_TOKEN=<pat> \
+  ./install-sherlock.sh
+
+SHERLOCK_HOME=/app/C10/Sherlock VM_HOST=<vm-fqdn> PAT_TOKEN=<pat> ./bootstrap.sh
+```
+
+## Fully airgapped VMs (no internet at all, even for OS packages)
+
+Same as above plus mirror the OS packages too:
+
+1. On a workstation with internet:
+   - `dnf download --resolve --destdir=./rpms python3.12 git jq`
+   - `pip download -r services/sherlock/requirements.txt -d ./wheels`
+2. SCP `./rpms`, `./wheels`, the source zip to the VM.
+3. On the VM: `dnf install ./rpms/*.rpm` first (handles the missing OS deps),
+   then run install scripts with `PIP_INDEX_URL=` pointing at a `file://` of
+   `./wheels` (or pass `--find-links` via a temporary `pip.conf`).
 
 ---
 

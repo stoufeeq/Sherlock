@@ -6,8 +6,14 @@
 #   sudo PAT_TOKEN=<token> VM_HOST=<vm-fqdn-or-ip> ./install-sherlock.sh
 #
 # Optional env knobs:
-#   SHERLOCK_HOME    install root           default /opt/sherlock
-#   NEO4J_PASSWORD   initial graph password default sherlock-dev
+#   SHERLOCK_HOME      install root             default /opt/sherlock
+#   NEO4J_PASSWORD     initial graph password   default sherlock-dev
+#   PIP_INDEX_URL      internal PyPI proxy URL  default pypi.org
+#                      (e.g. https://artifactory.ubs.internal/api/pypi/pypi/simple/)
+#   PIP_TRUSTED_HOST   bypass TLS verify for the PyPI host (corporate self-signed certs)
+#                      (e.g. artifactory.ubs.internal)
+#   OFFLINE_RPM_DIR    directory containing pre-downloaded gitlab-ce / neo4j RPMs
+#                      (e.g. /root/sherlock-rpms — used when those repos aren't reachable)
 
 set -euo pipefail
 
@@ -20,14 +26,32 @@ NEO4J_PASSWORD="${NEO4J_PASSWORD:-sherlock-dev}"
 WEBHOOK_SECRET="${WEBHOOK_SECRET:-$(openssl rand -hex 32)}"
 DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Build pip extra-flags from PIP_INDEX_URL / PIP_TRUSTED_HOST. Empty array
+# when neither is set so the call sites stay clean.
+PIP_OPTS=()
+if [[ -n "${PIP_INDEX_URL:-}" ]]; then
+  PIP_OPTS+=(--index-url "$PIP_INDEX_URL")
+fi
+if [[ -n "${PIP_TRUSTED_HOST:-}" ]]; then
+  PIP_OPTS+=(--trusted-host "$PIP_TRUSTED_HOST")
+fi
+
 # 1. OS prereqs ---------------------------------------------------------------
 echo "==> Installing OS prerequisites"
 dnf -y install python3.12 python3.12-pip python3.12-devel \
                 git curl jq policycoreutils-python-utils openssl
 
 # 2. Neo4j --------------------------------------------------------------------
-if ! rpm -q neo4j >/dev/null 2>&1; then
-  echo "==> Adding Neo4j rpm repo + installing"
+if rpm -q neo4j >/dev/null 2>&1; then
+  echo "==> Neo4j already installed (skipping)"
+elif [[ -n "${OFFLINE_RPM_DIR:-}" ]] && ls "$OFFLINE_RPM_DIR"/neo4j-*.rpm >/dev/null 2>&1; then
+  echo "==> Installing Neo4j from offline RPM at $OFFLINE_RPM_DIR"
+  # cypher-shell is a dependency on most Neo4j RPMs — pull it in too if present
+  dnf -y install "$OFFLINE_RPM_DIR"/cypher-shell-*.rpm "$OFFLINE_RPM_DIR"/neo4j-*.rpm 2>/dev/null \
+    || dnf -y install "$OFFLINE_RPM_DIR"/neo4j-*.rpm
+  neo4j-admin dbms set-initial-password "$NEO4J_PASSWORD" || true
+else
+  echo "==> Adding Neo4j rpm repo + installing from yum.neo4j.com"
   rpm --import https://debian.neo4j.com/neotechnology.gpg.key
   cat >/etc/yum.repos.d/neo4j.repo <<'REPO'
 [neo4j]
@@ -37,10 +61,7 @@ enabled=1
 gpgcheck=1
 REPO
   dnf -y install neo4j
-  # Initial password — only takes effect on a brand-new install
   neo4j-admin dbms set-initial-password "$NEO4J_PASSWORD" || true
-else
-  echo "==> Neo4j already installed (skipping)"
 fi
 systemctl enable --now neo4j
 
@@ -71,15 +92,15 @@ else
   exit 1
 fi
 
-echo "==> Building Sherlock venv"
+echo "==> Building Sherlock venv (pip index: ${PIP_INDEX_URL:-pypi.org default})"
 python3.12 -m venv "$SHERLOCK_HOME/venv"
-"$SHERLOCK_HOME/venv/bin/pip" install --upgrade pip
-"$SHERLOCK_HOME/venv/bin/pip" install -r "$SHERLOCK_HOME/services/sherlock/requirements.txt"
+"$SHERLOCK_HOME/venv/bin/pip" install "${PIP_OPTS[@]}" --upgrade pip
+"$SHERLOCK_HOME/venv/bin/pip" install "${PIP_OPTS[@]}" -r "$SHERLOCK_HOME/services/sherlock/requirements.txt"
 
 echo "==> Building CMDB-stub venv"
 python3.12 -m venv "$SHERLOCK_HOME/cmdb-venv"
-"$SHERLOCK_HOME/cmdb-venv/bin/pip" install --upgrade pip
-"$SHERLOCK_HOME/cmdb-venv/bin/pip" install -r "$SHERLOCK_HOME/services/sherlock-cmdb-stub/requirements.txt"
+"$SHERLOCK_HOME/cmdb-venv/bin/pip" install "${PIP_OPTS[@]}" --upgrade pip
+"$SHERLOCK_HOME/cmdb-venv/bin/pip" install "${PIP_OPTS[@]}" -r "$SHERLOCK_HOME/services/sherlock-cmdb-stub/requirements.txt"
 
 # 4. /etc/sherlock config -----------------------------------------------------
 echo "==> Writing /etc/sherlock/sherlock.env"
