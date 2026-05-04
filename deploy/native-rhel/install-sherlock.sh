@@ -49,12 +49,26 @@ if ! id sherlock >/dev/null 2>&1; then
   useradd --system --home "$SHERLOCK_HOME" --shell /sbin/nologin sherlock
 fi
 
-if [[ ! -d "$SHERLOCK_HOME/.git" ]]; then
+# Source can arrive three ways: git clone (if VM has github.com access), an
+# unzipped GitHub release (no .git dir), or a pre-existing checkout. Handle all
+# three without forcing internet to github when a zip-extracted source already
+# exists.
+if [[ -d "$SHERLOCK_HOME/services/sherlock" ]]; then
+  if [[ -d "$SHERLOCK_HOME/.git" ]]; then
+    echo "==> $SHERLOCK_HOME is a git checkout — pulling latest"
+    git -C "$SHERLOCK_HOME" pull --ff-only || \
+      echo "    (pull failed — proceeding with the source as-is)"
+  else
+    echo "==> Using existing source at $SHERLOCK_HOME (zip-extracted, no git)"
+  fi
+elif [[ ! -e "$SHERLOCK_HOME" ]]; then
   echo "==> Cloning Sherlock to $SHERLOCK_HOME"
   git clone https://github.com/stoufeeq/Sherlock.git "$SHERLOCK_HOME"
 else
-  echo "==> $SHERLOCK_HOME already a git checkout — pulling latest"
-  git -C "$SHERLOCK_HOME" pull --ff-only
+  echo "ERROR: $SHERLOCK_HOME exists but doesn't contain Sherlock source." >&2
+  echo "       Either delete it, or unzip the Sherlock release into it first:" >&2
+  echo "         sudo unzip Sherlock-main.zip -d /opt && sudo mv /opt/Sherlock-main $SHERLOCK_HOME" >&2
+  exit 1
 fi
 
 echo "==> Building Sherlock venv"
